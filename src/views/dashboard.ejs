@@ -836,62 +836,81 @@
 
             try {
                 const response = await fetch(`/admin/api/dashboard-data?filter=all`); // Always fetch all data
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let dashboardData = null;
+                let dataLoaded = false;
 
                 while (true) {
                     const {value, done} = await reader.read();
                     if (done) break;
 
                     const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
+                    const lines = chunk.split('\n').filter(line => line.trim());
 
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
-                            const data = JSON.parse(line.substring(6));
-                            
-                            if (data.error) {
-                                throw new Error(data.message);
-                            }
-                            
-                            if (data.progress !== undefined) {
-                                updateProgress(data.progress, data.message || '');
-                            }
-                            
-                            if (data.done && data.data) {
-                                dashboardData = data.data;
+                            try {
+                                const data = JSON.parse(line.substring(6));
                                 
-                                // Store all counterparties and cache time
-                                allCounterpartiesData = data.data.counterparties;
-                                currentCachedAt = Date.now();
+                                if (data.error) {
+                                    throw new Error(data.message);
+                                }
                                 
-                                // Update statistics
-                                document.getElementById('stat-total').textContent = data.data.stats.total_counterparties;
-                                document.getElementById('stat-debtors').textContent = data.data.stats.total_debtors;
-                                document.getElementById('stat-debt').textContent = formatCurrency(data.data.stats.total_debt);
-                                document.getElementById('stat-profit').textContent = formatCurrency(data.data.stats.total_profit);
-                                document.getElementById('stat-registered').textContent = data.data.stats.registered_users;
-                                document.getElementById('stat-active').textContent = data.data.stats.active_users;
+                                if (data.progress !== undefined) {
+                                    updateProgress(data.progress, data.message || '');
+                                }
+                                
+                                if (data.done && data.data) {
+                                    dashboardData = data.data;
+                                    dataLoaded = true;
+                                    
+                                    // Store all counterparties and cache time
+                                    allCounterpartiesData = data.data.counterparties;
+                                    currentCachedAt = Date.now();
+                                    
+                                    // Update statistics
+                                    document.getElementById('stat-total').textContent = data.data.stats.total_counterparties;
+                                    document.getElementById('stat-debtors').textContent = data.data.stats.total_debtors;
+                                    document.getElementById('stat-debt').textContent = formatCurrency(data.data.stats.total_debt);
+                                    document.getElementById('stat-profit').textContent = formatCurrency(data.data.stats.total_profit);
+                                    document.getElementById('stat-registered').textContent = data.data.stats.registered_users;
+                                    document.getElementById('stat-active').textContent = data.data.stats.active_users;
 
-                                // Filter locally and render
-                                const filteredCounterparties = filterCounterpartiesLocally(allCounterpartiesData, currentFilter);
-                                renderCounterparties(filteredCounterparties);
-                                
-                                // Save to localStorage with all counterparties
-                                saveCacheToLocalStorage(data.data, 'all');
-                                
-                                // Start cache age updater
-                                startCacheAgeUpdater();
+                                    // Filter locally and render
+                                    const filteredCounterparties = filterCounterpartiesLocally(allCounterpartiesData, currentFilter);
+                                    renderCounterparties(filteredCounterparties);
+                                    
+                                    // Save to localStorage with all counterparties
+                                    saveCacheToLocalStorage(data.data, 'all');
+                                    
+                                    // Start cache age updater
+                                    startCacheAgeUpdater();
+                                }
+                            } catch (parseError) {
+                                // Ignore JSON parse errors for incomplete chunks
+                                console.warn('Failed to parse chunk:', line, parseError);
                             }
                         }
                     }
                 }
 
+                if (!dataLoaded) {
+                    throw new Error('Данные не были загружены');
+                }
+
                 setTimeout(hideLoading, 500);
             } catch (error) {
                 console.error('Error loading dashboard:', error);
-                alert('❌ Ошибка загрузки: ' + error.message);
+                // Only show alert if data wasn't loaded successfully
+                if (allCounterpartiesData.length === 0) {
+                    alert('❌ Ошибка загрузки: ' + error.message);
+                }
                 hideLoading();
             } finally {
                 isLoading = false;
