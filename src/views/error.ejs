@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> - SkladBot Admin</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+      }
+
+      .error-container {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        padding: 40px;
+        max-width: 600px;
+        width: 100%;
+        text-align: center;
+      }
+
+      .error-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        color: #dc3545;
+        font-size: 32px;
+        margin-bottom: 15px;
+      }
+
+      .error-message {
+        color: #666;
+        font-size: 18px;
+        margin-bottom: 20px;
+        line-height: 1.6;
+      }
+
+      .error-details {
+        background: #f8f9fa;
+        border-left: 4px solid #dc3545;
+        padding: 15px;
+        margin: 20px 0;
+        text-align: left;
+        border-radius: 4px;
+      }
+
+      .error-details pre {
+        color: #333;
+        font-size: 14px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-family: "Courier New", monospace;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 12px 30px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: 600;
+        transition: transform 0.2s;
+        margin: 10px 5px;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: #6c757d;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="error-container">
+      <div class="error-icon">⚠️</div>
+      <h1><%= title || 'Ошибка' %></h1>
+
+      <div class="error-message">
+        <%= message || 'Произошла непредвиденная ошибка' %>
+      </div>
+
+      <% if (error && process.env.NODE_ENV === 'development') { %>
+      <div class="error-details">
+        <strong>Детали ошибки (только в dev режиме):</strong>
+        <pre><%= error %></pre>
+      </div>
+      <% } %>
+
+      <div style="margin-top: 30px">
+        <a href="/admin/dashboard" class="btn">🏠 На главную</a>
+        <a href="javascript:history.back()" class="btn btn-secondary"
+          >← Назад</a
+        >
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> - SkladBot Admin</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: #f0f2f5;
+        min-height: 100vh;
+      }
+
+      /* Navigation Menu */
+      .navbar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .navbar-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 30px;
+      }
+
+      .navbar-brand {
+        font-size: 24px;
+        font-weight: bold;
+        padding: 20px 0;
+      }
+
+      .navbar-menu {
+        display: flex;
+        list-style: none;
+        gap: 5px;
+      }
+
+      .navbar-menu a {
+        color: white;
+        text-decoration: none;
+        padding: 20px 20px;
+        display: block;
+        transition: background 0.3s;
+      }
+
+      .navbar-menu a:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .navbar-menu a.active {
+        background: rgba(255, 255, 255, 0.2);
+        border-bottom: 3px solid white;
+      }
+
+      .navbar-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 30px auto;
+        padding: 0 30px;
+      }
+
+      .page-header {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+      }
+
+      .page-header h1 {
+        font-size: 28px;
+        color: #333;
+        margin: 0;
+      }
+
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.2s;
+      }
+
+      .btn-white {
+        background: white;
+        color: #667eea;
+      }
+
+      .btn-white:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      .btn-primary {
+        background: #667eea;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: #5568d3;
+      }
+
+      .btn-success {
+        background: #28a745;
+        color: white;
+      }
+
+      .btn-success:hover {
+        background: #218838;
+      }
+
+      .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+
+      .stat-box {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .stat-box .label {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 8px;
+      }
+
+      .stat-box .value {
+        font-size: 28px;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .content-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      .card {
+        background: white;
+        border-radius: 10px;
+        padding: 30px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .card h2 {
+        margin-bottom: 20px;
+        color: #333;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: #333;
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .form-group input,
+      .form-group textarea,
+      .form-group select {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e0e0e0;
+        border-radius: 5px;
+        font-size: 14px;
+        font-family: inherit;
+        transition: border-color 0.3s;
+      }
+
+      .form-group input:focus,
+      .form-group textarea:focus,
+      .form-group select:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .form-group textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+
+      .form-help {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+      }
+
+      .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .history-list {
+        max-height: 600px;
+        overflow-y: auto;
+      }
+
+      .broadcast-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        border-left: 4px solid;
+      }
+
+      .broadcast-item.completed {
+        border-color: #28a745;
+      }
+
+      .broadcast-item.sending {
+        border-color: #ffc107;
+      }
+
+      .broadcast-item.failed {
+        border-color: #dc3545;
+      }
+
+      .broadcast-item.draft {
+        border-color: #6c757d;
+      }
+
+      .broadcast-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .broadcast-title {
+        font-weight: 600;
+        color: #333;
+      }
+
+      .broadcast-status {
+        padding: 4px 10px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .broadcast-status.completed {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .broadcast-status.sending {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      .broadcast-status.failed {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .broadcast-status.draft {
+        background: #e2e3e5;
+        color: #383d41;
+      }
+
+      .broadcast-meta {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+      }
+
+      .alert {
+        padding: 15px 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        border-left: 4px solid;
+      }
+
+      .alert-warning {
+        background: #fff3cd;
+        color: #856404;
+        border-color: #ffc107;
+      }
+
+      @media (max-width: 768px) {
+        .content-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navigation Menu -->
+    <nav class="navbar">
+      <div class="navbar-container">
+        <div class="navbar-brand">🤖 SkladBot Admin</div>
+        <ul class="navbar-menu">
+          <li><a href="/admin/dashboard">📊 Dashboard</a></li>
+          <li><a href="/admin/users">👥 Пользователи</a></li>
+          <li><a href="/admin/broadcast" class="active">📢 Рассылка</a></li>
+          <li><a href="/admin/settings">⚙️ Настройки</a></li>
+        </ul>
+        <div class="navbar-actions">
+          <a
+            href="/admin/logout"
+            class="btn btn-danger"
+            style="
+              padding: 10px 20px;
+              background: #dc3545;
+              color: white;
+              text-decoration: none;
+              border-radius: 5px;
+              font-size: 14px;
+              font-weight: 600;
+            "
+            >Выход</a
+          >
+        </div>
+      </div>
+    </nav>
+
+    <div class="container">
+      <div class="page-header">
+        <h1>📢 <%= title %></h1>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="label">Активных пользователей</div>
+          <div class="value"><%= activeUsers %></div>
+        </div>
+        <div class="stat-box">
+          <div class="label">Должников</div>
+          <div class="value"><%= debtorCount %></div>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        ⚠️ <strong>Лимит Telegram:</strong> Бот отправляет до 25 сообщений в
+        секунду. Большие рассылки могут занять время.
+      </div>
+
+      <div class="content-grid">
+        <!-- Create Broadcast Form -->
+        <div class="card">
+          <h2>Создать рассылку</h2>
+          <form id="broadcastForm">
+            <div class="form-group">
+              <label for="title">Название рассылки *</label>
+              <input
+                type="text"
+                id="title"
+                name="title"
+                required
+                placeholder="Например: Акция на товары"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="message_uz">Сообщение (Узбекский) *</label>
+              <textarea
+                id="message_uz"
+                name="message_uz"
+                required
+                placeholder="Введите текст сообщения на узбекском языке"
+              ></textarea>
+              <div class="form-help">Поддерживается emoji и форматирование</div>
+            </div>
+
+            <div class="form-group">
+              <label for="message_ru">Сообщение (Русский) *</label>
+              <textarea
+                id="message_ru"
+                name="message_ru"
+                required
+                placeholder="Введите текст сообщения на русском языке"
+              ></textarea>
+              <div class="form-help">Поддерживается emoji и форматирование</div>
+            </div>
+
+            <div class="form-group">
+              <label for="target_users">Кому отправить *</label>
+              <select id="target_users" name="target_users" required>
+                <option value="all">
+                  Всем активным пользователям (<%= activeUsers %>)
+                </option>
+                <option value="debtors">
+                  Только должникам (<%= debtorCount %>)
+                </option>
+              </select>
+            </div>
+
+            <div class="form-actions">
+              <button
+                type="button"
+                class="btn btn-success"
+                onclick="sendBroadcast(true)"
+              >
+                📤 Отправить сейчас
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                onclick="sendBroadcast(false)"
+              >
+                💾 Сохранить черновик
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Broadcast History -->
+        <div class="card">
+          <h2>История рассылок</h2>
+          <div class="history-list">
+            <% if (broadcasts.length === 0) { %>
+            <p style="text-align: center; color: #666; padding: 40px 0">
+              📭 Рассылок пока нет
+            </p>
+            <% } else { %> <% broadcasts.forEach(broadcast => { %>
+            <div class="broadcast-item <%= broadcast.status %>">
+              <div class="broadcast-header">
+                <div class="broadcast-title"><%= broadcast.title %></div>
+                <span class="broadcast-status <%= broadcast.status %>">
+                  <%= broadcast.status === 'completed' ? 'Отправлено' :
+                  broadcast.status === 'sending' ? 'Отправка...' :
+                  broadcast.status === 'failed' ? 'Ошибка' : 'Черновик' %>
+                </span>
+              </div>
+              <div class="broadcast-meta">
+                👤 Автор: <%= broadcast.created_by %> | 📅 <%= new
+                Date(broadcast.createdAt).toLocaleString('ru-RU') %> <% if
+                (broadcast.status === 'completed') { %> | ✅ <%=
+                broadcast.sent_count %>/<%= broadcast.total_count %> отправлено
+                <% } %> <% if (broadcast.status === 'sending') { %> | ⏳ <%=
+                broadcast.sent_count %>/<%= broadcast.total_count %> <% } %>
+              </div>
+              <% if (broadcast.status === 'draft') { %>
+              <button
+                class="btn btn-success"
+                style="margin-top: 10px; padding: 5px 15px; font-size: 12px"
+                onclick="sendDraft('<%= broadcast._id %>')"
+              >
+                📤 Отправить
+              </button>
+              <% } %>
+            </div>
+            <% }) %> <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      async function sendBroadcast(sendNow) {
+        const form = document.getElementById("broadcastForm");
+        const formData = new FormData(form);
+
+        const data = {
+          title: formData.get("title"),
+          message_uz: formData.get("message_uz"),
+          message_ru: formData.get("message_ru"),
+          target_users: formData.get("target_users"),
+          send_now: sendNow,
+        };
+
+        if (!data.title || !data.message_uz || !data.message_ru) {
+          alert("❌ Заполните все обязательные поля");
+          return;
+        }
+
+        const confirmMsg = sendNow
+          ? `Отправить рассылку сейчас?\n\nПолучатели: ${
+              data.target_users === "all" ? "Все активные" : "Только должники"
+            }`
+          : "Сохранить как черновик?";
+
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+
+        try {
+          const response = await fetch("/admin/broadcast", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            alert("✅ " + result.message);
+            window.location.reload();
+          } else {
+            alert("❌ Ошибка: " + result.error);
+          }
+        } catch (error) {
+          alert("❌ Ошибка: " + error.message);
+        }
+      }
+
+      async function sendDraft(broadcastId) {
+        if (!confirm("Отправить эту рассылку сейчас?")) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/admin/broadcast/${broadcastId}/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            alert("✅ " + result.message);
+            window.location.reload();
+          } else {
+            alert("❌ Ошибка: " + result.error);
+          }
+        } catch (error) {
+          alert("❌ Ошибка: " + error.message);
+        }
+      }
+    </script>
+  </body>
+</html>

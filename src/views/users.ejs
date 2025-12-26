@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> - SkladBot Admin</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: #f0f2f5;
+        min-height: 100vh;
+      }
+
+      /* Navigation Menu */
+      .navbar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .navbar-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 30px;
+      }
+
+      .navbar-brand {
+        font-size: 24px;
+        font-weight: bold;
+        padding: 20px 0;
+      }
+
+      .navbar-menu {
+        display: flex;
+        list-style: none;
+        gap: 5px;
+      }
+
+      .navbar-menu a {
+        color: white;
+        text-decoration: none;
+        padding: 20px 20px;
+        display: block;
+        transition: background 0.3s;
+      }
+
+      .navbar-menu a:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .navbar-menu a.active {
+        background: rgba(255, 255, 255, 0.2);
+        border-bottom: 3px solid white;
+      }
+
+      .navbar-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .navbar-user {
+        padding: 8px 15px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        font-size: 14px;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 30px auto;
+        padding: 0 30px;
+      }
+
+      .page-header {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+      }
+
+      .page-header h1 {
+        font-size: 28px;
+        color: #333;
+        margin: 0;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.2s;
+      }
+
+      .btn-logout {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 2px solid white;
+      }
+
+      .btn-logout:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .content {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .controls {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .filter-group label {
+        font-weight: 600;
+        color: #333;
+        font-size: 14px;
+      }
+
+      .filter-group select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 14px;
+        background: white;
+        cursor: pointer;
+      }
+
+      .filter-group select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 5px rgba(102, 126, 234, 0.1);
+      }
+
+      .loading {
+        display: none;
+        text-align: center;
+        padding: 30px;
+        color: #667eea;
+      }
+
+      .loading.active {
+        display: block;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .table-container {
+        overflow-x: auto;
+        margin-top: 20px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      thead {
+        background: #f8f9fa;
+      }
+
+      th {
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        border-bottom: 2px solid #ddd;
+        white-space: nowrap;
+      }
+
+      td {
+        padding: 15px;
+        border-bottom: 1px solid #eee;
+      }
+
+      tbody tr:hover {
+        background: #f8f9fa;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .status-active {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .status-inactive {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .status-blocked {
+        background: #e2e3e5;
+        color: #383d41;
+      }
+
+      .debt-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      .debt-high {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .no-debt {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .btn-edit {
+        background: #667eea;
+        color: white;
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: 4px;
+        text-decoration: none;
+        display: inline-block;
+      }
+
+      .btn-edit:hover {
+        background: #764ba2;
+      }
+
+      .btn-send {
+        background: #28a745;
+        color: white;
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+      }
+
+      .btn-send:hover {
+        background: #218838;
+      }
+
+      .btn-send:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 50px 20px;
+      }
+
+      .empty-state h3 {
+        color: #333;
+        margin-bottom: 10px;
+      }
+
+      .empty-state p {
+        color: #666;
+      }
+
+      .last-sent {
+        font-size: 12px;
+        color: #999;
+      }
+
+      .phone-cell {
+        font-weight: 500;
+      }
+
+      .blocked-icon {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        background: #dc3545;
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 16px;
+        font-size: 12px;
+        margin-left: 5px;
+        cursor: help;
+        title: "Заблокирован в MoySklad";
+      }
+
+      .success-message {
+        background: #d4edda;
+        color: #155724;
+        padding: 12px 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        border: 1px solid #c3e6cb;
+      }
+
+      .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 12px 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        border: 1px solid #f5c6cb;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navigation Menu -->
+    <nav class="navbar">
+      <div class="navbar-container">
+        <div class="navbar-brand">🤖 SkladBot Admin</div>
+        <ul class="navbar-menu">
+          <li><a href="/admin/dashboard">📊 Dashboard</a></li>
+          <li><a href="/admin/users" class="active">👥 Пользователи</a></li>
+          <li><a href="/admin/broadcast">📢 Рассылка</a></li>
+          <li><a href="/admin/settings">⚙️ Настройки</a></li>
+        </ul>
+        <div class="navbar-actions">
+          <a
+            href="/admin/logout"
+            class="btn btn-danger"
+            style="
+              padding: 10px 20px;
+              background: #dc3545;
+              color: white;
+              text-decoration: none;
+              border-radius: 5px;
+              font-size: 14px;
+              font-weight: 600;
+            "
+            >Выход</a
+          >
+        </div>
+      </div>
+    </nav>
+
+    <div class="container">
+      <div class="page-header">
+        <h1>👥 <%= title %></h1>
+      </div>
+
+      <div class="content">
+        <div class="controls">
+          <div class="filter-group">
+            <label for="filter">Фильтр:</label>
+            <select id="filter" onchange="filterUsers()">
+              <option value="all">
+                Все пользователи (<%= users.length %>)
+              </option>
+              <option value="debtors">
+                Только должники (<%= users.filter(u => u.isDebtor).length %>)
+              </option>
+              <option value="active">
+                Только активные (<%= users.filter(u => u.is_active).length %>)
+              </option>
+              <option value="inactive">
+                Неактивные (<%= users.filter(u => !u.is_active).length %>)
+              </option>
+              <option value="blocked">
+                Заблокированные в MoySklad (<%= users.filter(u =>
+                u.isBlocked).length %>)
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="loading" id="loading">
+          <div class="spinner"></div>
+          <p>Загрузка данных...</p>
+        </div>
+
+        <% if (users.length === 0) { %>
+        <div class="empty-state">
+          <h3>Нет пользователей</h3>
+          <p>Пока что нет зарегистрированных пользователей</p>
+        </div>
+        <% } else { %>
+        <div class="table-container">
+          <table id="usersTable">
+            <thead>
+              <tr>
+                <th>ФИО</th>
+                <th>Телефон</th>
+                <th>Статус</th>
+                <th>MoySklad</th>
+                <th>Задолженность</th>
+                <th>Последняя отправка</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% users.forEach(user => { %>
+              <tr
+                class="user-row"
+                data-debtor="<%= user.isDebtor ? 'true' : 'false' %>"
+                data-active="<%= user.is_active ? 'true' : 'false' %>"
+                data-blocked="<%= user.isBlocked ? 'true' : 'false' %>"
+              >
+                <td>
+                  <%= typeof user.getFullName === 'function' ?
+                  user.getFullName() : (user.last_name ? user.first_name + ' ' +
+                  user.last_name : user.first_name) %>
+                </td>
+                <td class="phone-cell">
+                  <%= user.phone %> <% if (user.isBlocked) { %>
+                  <span class="blocked-icon" title="Заблокирован в MoySklad"
+                    >🔒</span
+                  >
+                  <% } %>
+                </td>
+                <td>
+                  <span
+                    class="status-badge <%= user.is_active ? 'status-active' : 'status-inactive' %>"
+                  >
+                    <%= user.is_active ? '✅ Активен' : '❌ Неактивен' %>
+                  </span>
+                </td>
+                <td>
+                  <% if (user.moySkladFound) { %>
+                  <span style="color: #28a745">✓ Найден</span><br />
+                  <small><%= user.counterpartyName %></small>
+                  <% } else { %>
+                  <span style="color: #dc3545">✗ Не найден</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (user.currentDebt > 0) { %>
+                  <span class="debt-badge debt-high">
+                    <%= formatCurrency(user.currentDebt) %>
+                  </span>
+                  <% } else { %>
+                  <span class="debt-badge no-debt">Нет</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (user.last_sent_at) { %>
+                  <span class="last-sent"
+                    ><%= new Date(user.last_sent_at).toLocaleString('ru-RU')
+                    %></span
+                  >
+                  <% } else { %>
+                  <span class="last-sent">Никогда</span>
+                  <% } %>
+                </td>
+                <td style="white-space: nowrap">
+                  <a href="/admin/users/<%= user._id %>/edit" class="btn-edit"
+                    >✏️ Редактировать</a
+                  >
+                  <% if (user.is_active && user.moySkladFound &&
+                  user.currentDebt > 0) { %>
+                  <button
+                    class="btn-send"
+                    onclick="sendReminder('<%= user._id %>', this)"
+                  >
+                    📤 Отправить
+                  </button>
+                  <% } else if (!user.is_active) { %>
+                  <button
+                    class="btn-send"
+                    disabled
+                    title="Пользователь неактивен"
+                  >
+                    Неактивен
+                  </button>
+                  <% } else if (!user.moySkladFound) { %>
+                  <button
+                    class="btn-send"
+                    disabled
+                    title="Не найден в MoySklad"
+                  >
+                    Не найден
+                  </button>
+                  <% } else { %>
+                  <button class="btn-send" disabled title="Нет задолженности">
+                    Нет задолженности
+                  </button>
+                  <% } %>
+                </td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <% } %>
+      </div>
+    </div>
+
+    <script>
+      function filterUsers() {
+        const filter = document.getElementById("filter").value;
+        const rows = document.querySelectorAll(".user-row");
+        let visible = 0;
+
+        rows.forEach((row) => {
+          let show = true;
+          if (filter === "debtors") {
+            show = row.dataset.debtor === "true";
+          } else if (filter === "active") {
+            show = row.dataset.active === "true";
+          } else if (filter === "inactive") {
+            show = row.dataset.active === "false";
+          } else if (filter === "blocked") {
+            show = row.dataset.blocked === "true";
+          }
+          row.style.display = show ? "" : "none";
+          if (show) visible++;
+        });
+
+        console.log(`Showing ${visible} users with filter: ${filter}`);
+      }
+
+      async function sendReminder(userId, button) {
+        button.disabled = true;
+        button.textContent = "⏳ Отправка...";
+
+        try {
+          const response = await fetch(`/admin/users/${userId}/send`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            button.textContent = "✅ Отправлено";
+            setTimeout(() => {
+              button.textContent = "📤 Отправить";
+              button.disabled = false;
+            }, 2000);
+            alert(data.message);
+            location.reload();
+          } else {
+            button.textContent = "❌ Ошибка";
+            setTimeout(() => {
+              button.textContent = "📤 Отправить";
+              button.disabled = false;
+            }, 2000);
+            alert("Ошибка: " + data.message);
+          }
+        } catch (error) {
+          button.textContent = "❌ Ошибка";
+          console.error("Error:", error);
+          alert("Произошла ошибка");
+          setTimeout(() => {
+            button.textContent = "📤 Отправить";
+            button.disabled = false;
+          }, 2000);
+        }
+      }
+    </script>
+  </body>
+</html>
