@@ -455,13 +455,23 @@ router.get("/api/dashboard-data", requireAuth, async (req, res) => {
   try {
     const filter = req.query.filter || "all";
 
-    // Set up SSE headers for progress updates
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
+    // Check if SSE is supported (X-Accel-Buffering header for nginx)
+    const useSSE = req.headers["accept"] === "text/event-stream";
+
+    if (useSSE) {
+      // Set up SSE headers for progress updates
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
+    }
 
     const sendProgress = (percent, message) => {
-      res.write(`data: ${JSON.stringify({ progress: percent, message })}\n\n`);
+      if (useSSE) {
+        res.write(
+          `data: ${JSON.stringify({ progress: percent, message })}\n\n`
+        );
+      }
     };
 
     sendProgress(0, "Загрузка статистики...");
@@ -561,36 +571,47 @@ router.get("/api/dashboard-data", requireAuth, async (req, res) => {
 
     sendProgress(100, "Готово!");
 
-    // Send final data
-    res.write(
-      `data: ${JSON.stringify({
-        progress: 100,
-        done: true,
-        data: {
-          stats: {
-            total_counterparties: stats.total_counterparties,
-            total_debtors: stats.total_debtors,
-            total_debt: stats.total_debt,
-            total_profit: stats.total_profit,
-            registered_users: stats.registered_users,
-            active_users: stats.active_users,
-          },
-          counterparties: displayCounterparties,
-          cacheAge: Math.floor(cacheAge / 1000 / 60),
+    const responseData = {
+      progress: 100,
+      done: true,
+      data: {
+        stats: {
+          total_counterparties: stats.total_counterparties,
+          total_debtors: stats.total_debtors,
+          total_debt: stats.total_debt,
+          total_profit: stats.total_profit,
+          registered_users: stats.registered_users,
+          active_users: stats.active_users,
         },
-      })}\n\n`
-    );
+        counterparties: displayCounterparties,
+        cacheAge: Math.floor(cacheAge / 1000 / 60),
+      },
+    };
 
-    res.end();
+    // Send final data
+    if (useSSE) {
+      res.write(`data: ${JSON.stringify(responseData)}\n\n`);
+      res.end();
+    } else {
+      // Send as regular JSON for better compatibility
+      res.json(responseData);
+    }
   } catch (error) {
     console.error("Error loading dashboard data:", error);
-    res.write(
-      `data: ${JSON.stringify({
+    if (res.headersSent) {
+      res.write(
+        `data: ${JSON.stringify({
+          error: true,
+          message: error.message,
+        })}\n\n`
+      );
+      res.end();
+    } else {
+      res.status(500).json({
         error: true,
-        message: error.message,
-      })}\n\n`
-    );
-    res.end();
+        message: error.message || "Failed to load dashboard data",
+      });
+    }
   }
 });
 
