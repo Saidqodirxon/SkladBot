@@ -69,6 +69,7 @@ class DebtReminderSender {
       console.log(
         `  💰 Debt found: ${moySkladService.formatCurrency(debtAmount)}`
       );
+      console.log(`  🆔 Counterparty ID: ${counterparty.id}`);
 
       // Send reminder via Telegram using rate limiter
       let sent = false;
@@ -78,7 +79,8 @@ class DebtReminderSender {
             user.telegram_id,
             debtAmount,
             counterparty.name,
-            user.language || "uz"
+            user.language || "uz",
+            counterparty.id
           );
         });
         sent = true;

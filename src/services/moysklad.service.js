@@ -409,6 +409,274 @@ class MoySkladService {
   }
 
   /**
+   * Get counterparty documents (orders, invoices, payments)
+   * @param {string} counterpartyId - MoySklad counterparty ID
+   * @param {Object} options - Options
+   * @param {Array<string>} options.types - Document types to fetch (default: all)
+   * @param {number} options.limit - Max documents per type (default: 20)
+   * @returns {Promise<Array>} Array of documents with type, date, amount, status
+   */
+  async getCounterpartyDocuments(counterpartyId, options = {}) {
+    try {
+      if (!counterpartyId) {
+        throw new Error("Counterparty ID is required");
+      }
+
+      const {
+        types = [
+          "customerorder",
+          "demand",
+          "paymentin",
+          "paymentout",
+          "invoiceout",
+          "invoicein",
+        ],
+        limit = 20,
+      } = options;
+
+      const cacheKey = `counterparty:${counterpartyId}:documents`;
+
+      // Check cache
+      const cached = await Cache.get(cacheKey);
+      if (cached) {
+        console.log(`✅ Cache hit for documents ${counterpartyId}`);
+        return cached;
+      }
+
+      const allDocuments = [];
+
+      // Fetch each document type
+      for (const docType of types) {
+        try {
+          const url = `${this.apiUrl}/entity/${docType}?filter=agent=${this.apiUrl}/entity/counterparty/${counterpartyId}&limit=${limit}&order=moment,desc`;
+
+          console.log(`Fetching ${docType} for counterparty ${counterpartyId}`);
+
+          const response = await fetch(url, {
+            method: "GET",
+            headers: this.getHeaders(),
+          });
+
+          if (!response.ok) {
+            console.error(`Error fetching ${docType}: ${response.status}`);
+            continue;
+          }
+
+          const data = await response.json();
+
+          // Process documents
+          if (data.rows && data.rows.length > 0) {
+            for (const doc of data.rows) {
+              allDocuments.push({
+                id: doc.id,
+                type: docType,
+                typeName: this.getDocumentTypeName(docType),
+                name: doc.name || doc.description || "N/A",
+                date: doc.moment || doc.created,
+                sum: (doc.sum || 0) / 100, // Convert from kopeks
+                state: doc.state?.name || "N/A",
+                description: doc.description || "",
+                moySkladUrl: `https://online.moysklad.ru/app/#/${docType}/edit?id=${doc.id}`,
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching ${docType}:`, error.message);
+        }
+      }
+
+      // Sort by date descending
+      allDocuments.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      // Cache for 2 minutes
+      await Cache.set(cacheKey, allDocuments, 120);
+
+      return allDocuments;
+    } catch (error) {
+      console.error("Error getting counterparty documents:", error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get counterparty reconciliation report (Акт сверки)
+   * @param {string} counterpartyId - MoySklad counterparty ID
+   * @param {Object} options - Options
+   * @param {string} options.fromDate - Start date (YYYY-MM-DD)
+   * @param {string} options.toDate - End date (YYYY-MM-DD)
+   * @param {number} options.limit - Max documents per type (default: 100)
+   * @returns {Promise<Object>} Reconciliation report with opening balance, transactions, closing balance
+   */
+  async getCounterpartyReconciliation(counterpartyId, options = {}) {
+    try {
+      if (!counterpartyId) {
+        throw new Error("Counterparty ID is required");
+      }
+
+      const {
+        fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0],
+        toDate = new Date().toISOString().split("T")[0],
+        limit = 100,
+      } = options;
+
+      const cacheKey = `counterparty:${counterpartyId}:reconciliation:${fromDate}:${toDate}`;
+
+      // Check cache
+      const cached = await Cache.get(cacheKey);
+      if (cached) {
+        console.log(`✅ Cache hit for reconciliation ${counterpartyId}`);
+        return cached;
+      }
+
+      // Get counterparty details
+      const counterparty = await this.getCounterpartyDetails(counterpartyId);
+      if (!counterparty) {
+        throw new Error("Counterparty not found");
+      }
+
+      const allTransactions = [];
+      const types = [
+        "customerorder",
+        "demand",
+        "paymentin",
+        "paymentout",
+        "invoiceout",
+        "invoicein",
+        "supply",
+      ];
+
+      // Fetch all documents in date range
+      for (const docType of types) {
+        try {
+          const url = `${this.apiUrl}/entity/${docType}?filter=agent=${this.apiUrl}/entity/counterparty/${counterpartyId};moment>=${fromDate}T00:00:00;moment<=${toDate}T23:59:59&limit=${limit}&order=moment,asc`;
+
+          console.log(`Fetching ${docType} for reconciliation`);
+
+          const response = await fetch(url, {
+            method: "GET",
+            headers: this.getHeaders(),
+          });
+
+          if (!response.ok) {
+            console.error(`Error fetching ${docType}: ${response.status}`);
+            continue;
+          }
+
+          const data = await response.json();
+
+          if (data.rows && data.rows.length > 0) {
+            for (const doc of data.rows) {
+              const sum = (doc.sum || 0) / 100;
+
+              let debit = 0;
+              let credit = 0;
+
+              // DEBIT increases when we sell to them or they owe us
+              // CREDIT increases when they pay us or we owe them
+
+              if (
+                docType === "demand" ||
+                docType === "customerorder" ||
+                docType === "invoiceout"
+              ) {
+                // Sales, orders, outgoing invoices - they owe us money
+                debit = sum;
+              } else if (docType === "paymentin") {
+                // They paid us - reduces their debt
+                credit = sum;
+              } else if (docType === "paymentout") {
+                // We paid them or returned money - reduces their debt
+                credit = sum;
+              } else if (docType === "invoicein" || docType === "supply") {
+                // Incoming invoices, supplies - we owe them money
+                credit = sum;
+              }
+
+              allTransactions.push({
+                id: doc.id,
+                type: docType,
+                typeName: this.getDocumentTypeName(docType),
+                name: doc.name || doc.description || "N/A",
+                date: doc.moment || doc.created,
+                debit: debit,
+                credit: credit,
+                description: doc.description || "",
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching ${docType}:`, error.message);
+        }
+      }
+
+      allTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const periodDebitTotal = allTransactions.reduce(
+        (sum, t) => sum + t.debit,
+        0
+      );
+      const periodCreditTotal = allTransactions.reduce(
+        (sum, t) => sum + t.credit,
+        0
+      );
+      const currentBalance = counterparty.balance;
+      const openingBalance =
+        currentBalance - (periodDebitTotal - periodCreditTotal);
+      const closingBalance =
+        openingBalance + periodDebitTotal - periodCreditTotal;
+
+      const report = {
+        counterparty: {
+          id: counterpartyId,
+          name: counterparty.name,
+          phone: counterparty.phone || "",
+        },
+        period: {
+          from: fromDate,
+          to: toDate,
+        },
+        openingBalance: openingBalance,
+        transactions: allTransactions,
+        totals: {
+          debit: periodDebitTotal,
+          credit: periodCreditTotal,
+        },
+        closingBalance: closingBalance,
+      };
+
+      await Cache.set(cacheKey, report, 300);
+
+      return report;
+    } catch (error) {
+      console.error(
+        "Error getting counterparty reconciliation:",
+        error.message
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get human-readable document type name
+   * @param {string} docType - Document type code
+   * @returns {string} Human-readable name
+   */
+  getDocumentTypeName(docType) {
+    const typeMap = {
+      customerorder: "📦 Buyurtma / Заказ",
+      demand: "📤 Sotuv / Отгрузка",
+      paymentin: "💰 To'lov (kiruvchi) / Входящий платеж",
+      paymentout: "💸 To'lov (chiquvchi) / Исходящий платеж",
+      invoiceout: "📄 Faktura (chiquvchi) / Счет покупателю",
+      invoicein: "📥 Faktura (kiruvchi) / Счет поставщика",
+      supply: "📦 Keltirilgan tovar / Приемка",
+    };
+    return typeMap[docType] || docType;
+  }
+
+  /**
    * Format currency for Uzbekistan (UZS)
    * @param {number} amount - Amount in UZS
    * @returns {string} Formatted amount

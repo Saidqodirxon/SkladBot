@@ -573,7 +573,7 @@
     <script>
         let currentFilter = '<%= filter %>';
         let isLoading = false;
-        const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+        const CACHE_DURATION = <%= cacheTTLMs %>; // Cache TTL from settings in milliseconds
         const CACHE_KEY = 'dashboard_data';
         let allCounterpartiesData = []; // Store all counterparties for local filtering
         let currentCachedAt = null; // Store when data was cached
@@ -695,6 +695,13 @@
             
             document.getElementById('cacheAge').textContent = cacheAge;
             document.getElementById('nextUpdate').textContent = timeUntil;
+            
+            // Auto-refresh when cache expires
+            if (expiresAt <= Date.now()) {
+                clearInterval(cacheUpdateInterval);
+                localStorage.removeItem('dashboardCache');
+                loadDashboardData(true); // Force refresh from server
+            }
         }
 
         function startCacheAgeUpdater() {

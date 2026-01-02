@@ -129,6 +129,7 @@ router.get("/users", requireAuth, async (req, res) => {
                 ? Math.abs(counterparty.balance)
                 : 0,
             counterpartyName: counterparty ? counterparty.name : "Не найден",
+            counterpartyId: counterparty ? counterparty.id : null,
             moySkladFound: !!counterparty,
             isBlocked: counterparty ? counterparty.isBlocked : false,
             isDebtor: counterparty && counterparty.balance < 0,
@@ -190,6 +191,7 @@ router.get("/users/:id/edit", requireAuth, async (req, res) => {
     // Get current debt from MoySklad
     let currentDebt = 0;
     let counterpartyName = "Не найден";
+    let counterpartyId = null;
     let moySkladFound = false;
     let isBlocked = false;
 
@@ -201,6 +203,7 @@ router.get("/users/:id/edit", requireAuth, async (req, res) => {
       if (counterparty) {
         moySkladFound = true;
         counterpartyName = counterparty.name;
+        counterpartyId = counterparty.id;
         isBlocked = counterparty.isBlocked || false;
         if (counterparty.balance < 0) {
           currentDebt = Math.abs(counterparty.balance);
@@ -220,6 +223,7 @@ router.get("/users/:id/edit", requireAuth, async (req, res) => {
       user: user.toObject(),
       currentDebt,
       counterpartyName,
+      counterpartyId,
       moySkladFound,
       isBlocked,
       globalSendTime,
@@ -360,7 +364,8 @@ router.post("/users/:id/send", requireAuth, async (req, res) => {
       user.telegram_id,
       debtAmount,
       counterparty.name,
-      user.language || "uz"
+      user.language || "uz",
+      counterparty.id
     );
 
     if (sent) {
@@ -385,6 +390,99 @@ router.post("/users/:id/send", requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Произошла ошибка при отправке",
+    });
+  }
+});
+
+/**
+ * GET /admin/counterparty/:id/reconciliation
+ * Get reconciliation report (Акт сверки) for a specific counterparty
+ */
+router.get(
+  "/counterparty/:id/reconciliation",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const counterpartyId = req.params.id;
+      const { from, to } = req.query;
+
+      if (!counterpartyId) {
+        return res.status(400).json({ error: "Counterparty ID is required" });
+      }
+
+      console.log(
+        `Fetching reconciliation for counterparty: ${counterpartyId}`
+      );
+
+      const report = await moySkladService.getCounterpartyReconciliation(
+        counterpartyId,
+        {
+          fromDate: from,
+          toDate: to,
+          limit: 100,
+        }
+      );
+
+      if (!report) {
+        return res.status(404).json({
+          success: false,
+          error: "Не удалось получить отчет",
+        });
+      }
+
+      res.json({
+        success: true,
+        report,
+      });
+    } catch (error) {
+      console.error("Error fetching counterparty reconciliation:", error);
+      res.status(500).json({
+        success: false,
+        error: "Ошибка при получении отчета",
+      });
+    }
+  }
+);
+
+/**
+ * GET /admin/counterparty/:id/documents
+ * Get documents for a specific counterparty
+ */
+router.get("/counterparty/:id/documents", requireAuth, async (req, res) => {
+  try {
+    const counterpartyId = req.params.id;
+
+    if (!counterpartyId) {
+      return res.status(400).json({ error: "Counterparty ID is required" });
+    }
+
+    console.log(`Fetching documents for counterparty: ${counterpartyId}`);
+
+    const documents = await moySkladService.getCounterpartyDocuments(
+      counterpartyId,
+      {
+        types: [
+          "customerorder",
+          "demand",
+          "paymentin",
+          "paymentout",
+          "invoiceout",
+        ],
+        limit: 30,
+      }
+    );
+
+    res.json({
+      success: true,
+      counterpartyId,
+      documents,
+      total: documents.length,
+    });
+  } catch (error) {
+    console.error("Error fetching counterparty documents:", error);
+    res.status(500).json({
+      success: false,
+      error: "Ошибка при получении документов",
     });
   }
 });
@@ -428,6 +526,10 @@ router.get("/dashboard", requireAuth, async (req, res) => {
     let stats = await Statistics.getTodayStats();
     const cacheAge = Date.now() - new Date(stats.last_updated).getTime();
 
+    // Get cache TTL from settings
+    const cacheTTLSeconds = await Settings.get("CACHE_TTL", 300);
+    const cacheTTLMs = cacheTTLSeconds * 1000; // Convert to milliseconds
+
     res.render("dashboard", {
       stats,
       counterparties: [], // Empty initially, will be loaded via AJAX
@@ -435,6 +537,7 @@ router.get("/dashboard", requireAuth, async (req, res) => {
       title: "Dashboard - Все пользователи",
       formatCurrency: moySkladService.formatCurrency.bind(moySkladService),
       cacheAge: Math.floor(cacheAge / 1000 / 60), // minutes
+      cacheTTLMs,
       adminUsername: req.session.username,
     });
   } catch (error) {
@@ -689,7 +792,8 @@ router.post("/send-reminders", requireAuth, async (req, res) => {
               user.telegram_id,
               debtAmount,
               counterparty.name,
-              user.language || "uz"
+              user.language || "uz",
+              counterparty.id
             );
           });
 

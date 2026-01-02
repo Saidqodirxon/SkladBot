@@ -542,8 +542,180 @@ class TelegramBot {
       if (counterparty.balance < 0) {
         const debt = Math.abs(counterparty.balance);
         message += `${t.debt}\n`;
-        message += `${t.amount}: ${moySkladService.formatCurrency(debt)}\n\n`;
-        message += t.debtWarning;
+        message += `${t.amount}: ${moySkladService.formatCurrency(debt)}\n`;
+
+        // Add reconciliation details
+        console.log(
+          `🔍 Fetching reconciliation for counterparty ID: ${counterparty.id}`
+        );
+
+        if (!counterparty.id) {
+          console.error("❌ Counterparty ID is missing!");
+          message += `\n⚠️ Ma'lumotlarni yuklashda xatolik\n`;
+        } else {
+          try {
+            const toDate = new Date().toISOString().split("T")[0];
+            const fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0];
+
+            console.log(
+              `📅 Fetching reconciliation from ${fromDate} to ${toDate}`
+            );
+
+            const report = await moySkladService.getCounterpartyReconciliation(
+              counterparty.id,
+              { fromDate, toDate, limit: 100 }
+            );
+
+            console.log(
+              `📊 Report received:`,
+              report
+                ? `${report.transactions?.length || 0} transactions`
+                : "null"
+            );
+
+            if (
+              report &&
+              report.transactions &&
+              report.transactions.length > 0
+            ) {
+              const fromFormatted = new Date(
+                report.period.from
+              ).toLocaleDateString("ru-RU");
+              const toFormatted = new Date(report.period.to).toLocaleDateString(
+                "ru-RU"
+              );
+
+              message +=
+                lang === "uz"
+                  ? `\n📋 TAFSILOTLAR (${fromFormatted} - ${toFormatted}):\n\n`
+                  : `\n📋 ДЕТАЛИЗАЦИЯ (${fromFormatted} - ${toFormatted}):\n\n`;
+
+              // Show opening balance
+              message +=
+                lang === "uz"
+                  ? `Boshlang'ich qoldiq: ${moySkladService.formatCurrency(
+                      Math.abs(report.openingBalance)
+                    )}\n\n`
+                  : `Сальдо на начало: ${moySkladService.formatCurrency(
+                      Math.abs(report.openingBalance)
+                    )}\n\n`;
+
+              // Show last 10 transactions
+              const recentTransactions = report.transactions.slice(-10);
+              recentTransactions.forEach((t) => {
+                const date = new Date(t.date).toLocaleDateString("ru-RU");
+                const typeName = t.typeName
+                  .split("/")
+                  [lang === "ru" ? 1 : 0].trim();
+
+                if (t.debit > 0) {
+                  message += `• ${date} - ${typeName}\n  +${moySkladService.formatCurrency(
+                    t.debit
+                  )}\n`;
+                } else if (t.credit > 0) {
+                  message += `• ${date} - ${typeName}\n  -${moySkladService.formatCurrency(
+                    t.credit
+                  )}\n`;
+                }
+              });
+
+              message +=
+                lang === "uz"
+                  ? `\n📊 Davr uchun jami:\n  Hisoblangan: ${moySkladService.formatCurrency(
+                      report.totals.debit
+                    )}\n  To'langan: ${moySkladService.formatCurrency(
+                      report.totals.credit
+                    )}\n`
+                  : `\n📊 Итого за период:\n  Начислено: ${moySkladService.formatCurrency(
+                      report.totals.debit
+                    )}\n  Оплачено: ${moySkladService.formatCurrency(
+                      report.totals.credit
+                    )}\n`;
+
+              message +=
+                lang === "uz"
+                  ? `\nOxirgi qoldiq: ${moySkladService.formatCurrency(
+                      Math.abs(report.closingBalance)
+                    )}\n`
+                  : `\nСальдо на конец: ${moySkladService.formatCurrency(
+                      Math.abs(report.closingBalance)
+                    )}\n`;
+
+              console.log("✅ Reconciliation details added to message");
+            } else if (report) {
+              // Show info even if no transactions
+              const fromFormatted = new Date(
+                report.period.from
+              ).toLocaleDateString("ru-RU");
+              const toFormatted = new Date(report.period.to).toLocaleDateString(
+                "ru-RU"
+              );
+
+              message +=
+                lang === "uz"
+                  ? `\n📋 TAFSILOTLAR (${fromFormatted} - ${toFormatted}):\n\n`
+                  : `\n📋 ДЕТАЛИЗАЦИЯ (${fromFormatted} - ${toFormatted}):\n\n`;
+
+              message +=
+                lang === "uz"
+                  ? `Boshlang'ich qoldiq: ${moySkladService.formatCurrency(
+                      Math.abs(report.openingBalance)
+                    )}\n\n`
+                  : `Сальдо на начало: ${moySkladService.formatCurrency(
+                      Math.abs(report.openingBalance)
+                    )}\n\n`;
+
+              message +=
+                lang === "uz"
+                  ? `Davr uchun tranzaksiyalar yo'q\n\n`
+                  : `Транзакций за период нет\n\n`;
+
+              message +=
+                lang === "uz"
+                  ? `📊 Davr uchun jami:\n  Hisoblangan: ${moySkladService.formatCurrency(
+                      report.totals.debit
+                    )}\n  To'langan: ${moySkladService.formatCurrency(
+                      report.totals.credit
+                    )}\n`
+                  : `📊 Итого за период:\n  Начислено: ${moySkladService.formatCurrency(
+                      report.totals.debit
+                    )}\n  Оплачено: ${moySkladService.formatCurrency(
+                      report.totals.credit
+                    )}\n`;
+
+              message +=
+                lang === "uz"
+                  ? `\nOxirgi qoldiq: ${moySkladService.formatCurrency(
+                      Math.abs(report.closingBalance)
+                    )}\n`
+                  : `\nСальдо на конец: ${moySkladService.formatCurrency(
+                      Math.abs(report.closingBalance)
+                    )}\n`;
+
+              console.log("✅ Reconciliation details added (no transactions)");
+            } else {
+              console.log("⚠️ Report is null - no data returned");
+              message +=
+                lang === "uz"
+                  ? `\n⚠️ Ma'lumot topilmadi\n`
+                  : `\n⚠️ Данные не найдены\n`;
+            }
+          } catch (error) {
+            console.error(
+              "❌ Error getting reconciliation in /stat:",
+              error.message,
+              error.stack
+            );
+            message +=
+              lang === "uz"
+                ? `\n⚠️ Tafsilotlarni yuklashda xatolik\n`
+                : `\n⚠️ Ошибка загрузки детализации\n`;
+          }
+        }
+
+        message += `\n${t.debtWarning}`;
       } else if (counterparty.balance > 0) {
         message += `${t.overpay}\n`;
         message += `${t.amount}: ${moySkladService.formatCurrency(
@@ -625,31 +797,146 @@ class TelegramBot {
    * @param {number} debtAmount - Debt amount
    * @param {string} counterpartyName - Counterparty name from MoySklad
    * @param {string} language - User's language preference ('uz' or 'ru')
+   * @param {string} counterpartyId - Counterparty ID for reconciliation report
    */
   async sendDebtReminder(
     telegramId,
     debtAmount,
     counterpartyName,
-    language = "uz"
+    language = "uz",
+    counterpartyId = null
   ) {
     try {
       let message;
+
+      // Get reconciliation data for last 30 days if counterpartyId provided
+      let reconciliationText = "";
+      console.log(
+        `📋 Getting reconciliation for counterparty: ${counterpartyId}`
+      );
+
+      if (counterpartyId) {
+        try {
+          const toDate = new Date().toISOString().split("T")[0];
+          const fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split("T")[0];
+
+          console.log(`📅 Date range: ${fromDate} to ${toDate}`);
+
+          const report = await moySkladService.getCounterpartyReconciliation(
+            counterpartyId,
+            {
+              fromDate,
+              toDate,
+              limit: 100, // Get more transactions
+            }
+          );
+
+          console.log(
+            `📊 Report received:`,
+            report ? `${report.transactions?.length || 0} transactions` : "null"
+          );
+
+          if (report) {
+            const fromFormatted = new Date(
+              report.period.from
+            ).toLocaleDateString("ru-RU");
+            const toFormatted = new Date(report.period.to).toLocaleDateString(
+              "ru-RU"
+            );
+
+            if (language === "ru") {
+              reconciliationText = `\n\n📋 ДЕТАЛИЗАЦИЯ (${fromFormatted} - ${toFormatted}):\n\n`;
+            } else {
+              reconciliationText = `\n\n📋 TAFSILOTLAR (${fromFormatted} - ${toFormatted}):\n\n`;
+            }
+
+            // Show opening balance
+            reconciliationText +=
+              language === "ru"
+                ? `Сальдо на начало: ${moySkladService.formatCurrency(
+                    Math.abs(report.openingBalance)
+                  )}\n\n`
+                : `Boshlang'ich qoldiq: ${moySkladService.formatCurrency(
+                    Math.abs(report.openingBalance)
+                  )}\n\n`;
+
+            // Add transactions if any
+            if (report.transactions && report.transactions.length > 0) {
+              const recentTransactions = report.transactions.slice(-10);
+              recentTransactions.forEach((t) => {
+                const date = new Date(t.date).toLocaleDateString("ru-RU");
+                const typeName = t.typeName
+                  .split("/")
+                  [language === "ru" ? 1 : 0].trim();
+
+                if (t.debit > 0) {
+                  reconciliationText += `• ${date} - ${typeName}\n  +${moySkladService.formatCurrency(
+                    t.debit
+                  )}\n`;
+                } else if (t.credit > 0) {
+                  reconciliationText += `• ${date} - ${typeName}\n  -${moySkladService.formatCurrency(
+                    t.credit
+                  )}\n`;
+                }
+              });
+              reconciliationText += "\n";
+            } else {
+              reconciliationText +=
+                language === "ru"
+                  ? `Транзакций за период нет\n\n`
+                  : `Davr uchun tranzaksiyalar yo'q\n\n`;
+            }
+
+            // Show totals and closing balance
+            if (language === "ru") {
+              reconciliationText += `📊 Итого за период:\n`;
+              reconciliationText += `  Начислено: ${moySkladService.formatCurrency(
+                report.totals.debit
+              )}\n`;
+              reconciliationText += `  Оплачено: ${moySkladService.formatCurrency(
+                report.totals.credit
+              )}\n`;
+              reconciliationText += `\nСальдо на конец: ${moySkladService.formatCurrency(
+                Math.abs(report.closingBalance)
+              )}\n`;
+            } else {
+              reconciliationText += `📊 Davr uchun jami:\n`;
+              reconciliationText += `  Hisoblangan: ${moySkladService.formatCurrency(
+                report.totals.debit
+              )}\n`;
+              reconciliationText += `  To'langan: ${moySkladService.formatCurrency(
+                report.totals.credit
+              )}\n`;
+              reconciliationText += `\nOxirgi qoldiq: ${moySkladService.formatCurrency(
+                Math.abs(report.closingBalance)
+              )}\n`;
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Error getting reconciliation for reminder:",
+            error.message
+          );
+        }
+      }
 
       if (language === "ru") {
         message =
           `📢 НАПОМИНАНИЕ О ЗАДОЛЖЕННОСТИ\n\n` +
           `👤 Имя: ${counterpartyName}\n` +
-          `❗️ Сумма долга: ${moySkladService.formatCurrency(debtAmount)}\n\n` +
-          `⚠️ Пожалуйста, погасите задолженность в ближайшее время!\n\n` +
+          `❗️ Сумма долга: ${moySkladService.formatCurrency(debtAmount)}\n` +
+          reconciliationText +
+          `\n⚠️ Пожалуйста, погасите задолженность в ближайшее время!\n\n` +
           `📊 Проверить баланс: /stat`;
       } else {
         message =
           `📢 QARZDORLIK ESLATMASI\n\n` +
           `👤 Ism: ${counterpartyName}\n` +
-          `❗️ Qarz summasi: ${moySkladService.formatCurrency(
-            debtAmount
-          )}\n\n` +
-          `⚠️ Iltimos, qarzni tezda to'lang!\n\n` +
+          `❗️ Qarz summasi: ${moySkladService.formatCurrency(debtAmount)}\n` +
+          reconciliationText +
+          `\n⚠️ Iltimos, qarzni tezda to'lang!\n\n` +
           `📊 Balansni tekshirish: /stat`;
       }
 
