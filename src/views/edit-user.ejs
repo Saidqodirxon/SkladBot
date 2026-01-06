@@ -368,9 +368,8 @@
                             value="<%= user.phone %>"
                             required
                             placeholder="+998901234567"
-                            pattern="^\+998\d{9}$"
                         >
-                        <div class="form-help">Формат: +998XXXXXXXXX (9 цифр после +998)</div>
+                        <div class="form-help">Telefon raqamini kiriting</div>
                     </div>
                 </div>
 
@@ -418,13 +417,6 @@
                     <button type="submit" class="btn btn-primary">
                         💾 Сохранить изменения
                     </button>
-                    <a 
-                        href="/admin/users/<%= user._id %>/orders" 
-                        class="btn"
-                        style="background: #28a745; color: white;"
-                    >
-                        📦 История заказов
-                    </a>
                     <button 
                         type="button" 
                         class="btn btn-danger" 

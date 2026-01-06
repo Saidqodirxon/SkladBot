@@ -254,23 +254,9 @@ router.post("/users/:id", requireAuth, async (req, res) => {
 
     const { phone, is_active, send_time } = req.body;
 
-    // Validate and update phone
-    if (phone) {
-      const normalizedPhone = User.normalizePhone(phone);
-      if (!/^\+998\d{9}$/.test(normalizedPhone)) {
-        return res.render("edit-user", {
-          user: user.toObject(),
-          currentDebt: 0,
-          counterpartyName: "",
-          moySkladFound: false,
-          isBlocked: false,
-          error: "Неверный формат телефона",
-          success: null,
-          title: `Редактировать: ${user.getFullName()}`,
-          formatCurrency: moySkladService.formatCurrency.bind(moySkladService),
-        });
-      }
-      user.phone = normalizedPhone;
+    // Update phone without validation
+    if (phone && phone.trim()) {
+      user.phone = phone.trim();
     }
 
     // Update is_active

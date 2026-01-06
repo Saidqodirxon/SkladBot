@@ -8,401 +8,12 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Excel Generator Utility
- * Creates Excel files for order history and shipments
+ * Creates detailed Excel files with document and product information
  */
 class ExcelGenerator {
   /**
-   * Generate Excel file with shipment details
-   * @param {Object} data - Data object
-   * @param {Object} data.counterparty - Counterparty info (id, name, phone, balance)
-   * @param {Array} data.shipments - Array of shipments with products
-   * @param {string} language - Language code ('uz' or 'ru')
-   * @returns {Promise<string>} Path to generated Excel file
-   */
-  async generateShipmentsExcel(data, language = "uz") {
-    try {
-      const { counterparty, shipments } = data;
-
-      // Create workbook
-      const workbook = xlsx.utils.book_new();
-
-      // Texts in different languages
-      const texts = {
-        uz: {
-          sheetName: "Yuboruvlar",
-          title: "YUBORUVLAR TARIXI",
-          clientName: "Mijoz:",
-          phone: "Telefon:",
-          totalDebt: "Jami qarz:",
-          date: "Sana",
-          docNumber: "Hujjat №",
-          productName: "Mahsulot nomi",
-          code: "Kod",
-          quantity: "Miqdor",
-          price: "Narx",
-          sum: "Summa",
-          status: "Holat",
-          total: "JAMI:",
-          empty: "Ma'lumot topilmadi",
-        },
-        ru: {
-          sheetName: "Отгрузки",
-          title: "ИСТОРИЯ ОТГРУЗОК",
-          clientName: "Клиент:",
-          phone: "Телефон:",
-          totalDebt: "Общий долг:",
-          date: "Дата",
-          docNumber: "Документ №",
-          productName: "Наименование товара",
-          code: "Код",
-          quantity: "Кол-во",
-          price: "Цена",
-          sum: "Сумма",
-          status: "Статус",
-          total: "ИТОГО:",
-          empty: "Данные не найдены",
-        },
-      };
-
-      const t = texts[language] || texts.uz;
-
-      // Prepare data for worksheet
-      const wsData = [];
-
-      // Header
-      wsData.push([t.title]);
-      wsData.push([]);
-      wsData.push([t.clientName, counterparty.name]);
-      wsData.push([t.phone, counterparty.phone]);
-      if (counterparty.balance < 0) {
-        wsData.push([
-          t.totalDebt,
-          this.formatCurrency(Math.abs(counterparty.balance)),
-        ]);
-      }
-      wsData.push([]);
-
-      if (!shipments || shipments.length === 0) {
-        wsData.push([t.empty]);
-      } else {
-        // Table header
-        wsData.push([
-          t.date,
-          t.docNumber,
-          t.productName,
-          t.code,
-          t.quantity,
-          t.price,
-          t.sum,
-          t.status,
-        ]);
-
-        // Process each shipment
-        let grandTotal = 0;
-        shipments.forEach((shipment) => {
-          const date = new Date(shipment.date).toLocaleDateString(
-            language === "ru" ? "ru-RU" : "uz-UZ"
-          );
-
-          if (shipment.products && shipment.products.length > 0) {
-            // First product row includes shipment info
-            const firstProduct = shipment.products[0];
-            // Add product name with image link if available
-            let productName = firstProduct.name;
-            if (firstProduct.imageUrl) {
-              productName = `${firstProduct.name} 📷`;
-            }
-
-            wsData.push([
-              date,
-              shipment.number || shipment.name,
-              productName,
-              firstProduct.code || firstProduct.article,
-              firstProduct.quantity,
-              firstProduct.price,
-              firstProduct.sum,
-              shipment.state,
-            ]);
-
-            // Rest of the products
-            for (let i = 1; i < shipment.products.length; i++) {
-              const product = shipment.products[i];
-              let prodName = product.name;
-              if (product.imageUrl) {
-                prodName = `${product.name} 📷`;
-              }
-
-              wsData.push([
-                "",
-                "",
-                prodName,
-                product.code || product.article,
-                product.quantity,
-                product.price,
-                product.sum,
-                "",
-              ]);
-            }
-          } else {
-            // Shipment without products
-            wsData.push([
-              date,
-              shipment.number || shipment.name,
-              "-",
-              "",
-              "",
-              "",
-              shipment.sum,
-              shipment.state,
-            ]);
-          }
-
-          grandTotal += shipment.sum;
-
-          // Empty row between shipments
-          wsData.push([]);
-        });
-
-        // Grand total
-        wsData.push(["", "", "", "", "", t.total, grandTotal, ""]);
-      }
-
-      // Create worksheet
-      const ws = xlsx.utils.aoa_to_sheet(wsData);
-
-      // Set column widths
-      ws["!cols"] = [
-        { wch: 12 }, // Date
-        { wch: 12 }, // Doc number
-        { wch: 40 }, // Product name
-        { wch: 15 }, // Code
-        { wch: 10 }, // Quantity
-        { wch: 15 }, // Price
-        { wch: 15 }, // Sum
-        { wch: 15 }, // Status
-      ];
-
-      // Add worksheet to workbook
-      xlsx.utils.book_append_sheet(workbook, ws, t.sheetName);
-
-      // Generate file path
-      const tempDir = path.join(__dirname, "../../temp");
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-
-      const timestamp = Date.now();
-      const fileName = `shipments_${counterparty.phone}_${timestamp}.xlsx`;
-      const filePath = path.join(tempDir, fileName);
-
-      // Write file
-      xlsx.writeFile(workbook, filePath);
-
-      console.log(`✅ Excel file generated: ${filePath}`);
-      return filePath;
-    } catch (error) {
-      console.error("Error generating Excel file:", error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate Excel file with orders details
-   * @param {Object} data - Data object
-   * @param {Object} data.counterparty - Counterparty info
-   * @param {Array} data.orders - Array of orders with products
-   * @param {string} language - Language code ('uz' or 'ru')
-   * @returns {Promise<string>} Path to generated Excel file
-   */
-  async generateOrdersExcel(data, language = "uz") {
-    try {
-      const { counterparty, orders } = data;
-
-      // Create workbook
-      const workbook = xlsx.utils.book_new();
-
-      // Texts in different languages
-      const texts = {
-        uz: {
-          sheetName: "Buyurtmalar",
-          title: "BUYURTMALAR TARIXI",
-          clientName: "Mijoz:",
-          phone: "Telefon:",
-          totalDebt: "Jami qarz:",
-          date: "Sana",
-          docNumber: "Hujjat №",
-          productName: "Mahsulot nomi",
-          code: "Kod",
-          quantity: "Miqdor",
-          price: "Narx",
-          sum: "Summa",
-          status: "Holat",
-          total: "JAMI:",
-          empty: "Ma'lumot topilmadi",
-        },
-        ru: {
-          sheetName: "Заказы",
-          title: "ИСТОРИЯ ЗАКАЗОВ",
-          clientName: "Клиент:",
-          phone: "Телефон:",
-          totalDebt: "Общий долг:",
-          date: "Дата",
-          docNumber: "Документ №",
-          productName: "Наименование товара",
-          code: "Код",
-          quantity: "Кол-во",
-          price: "Цена",
-          sum: "Сумма",
-          status: "Статус",
-          total: "ИТОГО:",
-          empty: "Данные не найдены",
-        },
-      };
-
-      const t = texts[language] || texts.uz;
-
-      // Prepare data for worksheet
-      const wsData = [];
-
-      // Header
-      wsData.push([t.title]);
-      wsData.push([]);
-      wsData.push([t.clientName, counterparty.name]);
-      wsData.push([t.phone, counterparty.phone]);
-      if (counterparty.balance < 0) {
-        wsData.push([
-          t.totalDebt,
-          this.formatCurrency(Math.abs(counterparty.balance)),
-        ]);
-      }
-      wsData.push([]);
-
-      if (!orders || orders.length === 0) {
-        wsData.push([t.empty]);
-      } else {
-        // Table header
-        wsData.push([
-          t.date,
-          t.docNumber,
-          t.productName,
-          t.code,
-          t.quantity,
-          t.price,
-          t.sum,
-          t.status,
-        ]);
-
-        // Process each order
-        let grandTotal = 0;
-        orders.forEach((order) => {
-          const date = new Date(order.date).toLocaleDateString(
-            language === "ru" ? "ru-RU" : "uz-UZ"
-          );
-
-          if (order.products && order.products.length > 0) {
-            // First product row includes order info
-            const firstProduct = order.products[0];
-            // Add product name with image icon if available
-            let productName = firstProduct.name;
-            if (firstProduct.imageUrl) {
-              productName = `${firstProduct.name} 📷`;
-            }
-
-            wsData.push([
-              date,
-              order.number || order.name,
-              productName,
-              firstProduct.code || firstProduct.article,
-              firstProduct.quantity,
-              firstProduct.price,
-              firstProduct.sum,
-              order.state,
-            ]);
-
-            // Rest of the products
-            for (let i = 1; i < order.products.length; i++) {
-              const product = order.products[i];
-              let prodName = product.name;
-              if (product.imageUrl) {
-                prodName = `${product.name} 📷`;
-              }
-
-              wsData.push([
-                "",
-                "",
-                prodName,
-                product.code || product.article,
-                product.quantity,
-                product.price,
-                product.sum,
-                "",
-              ]);
-            }
-          } else {
-            // Order without products
-            wsData.push([
-              date,
-              order.number || order.name,
-              "-",
-              "",
-              "",
-              "",
-              order.sum,
-              order.state,
-            ]);
-          }
-
-          grandTotal += order.sum;
-
-          // Empty row between orders
-          wsData.push([]);
-        });
-
-        // Grand total
-        wsData.push(["", "", "", "", "", t.total, grandTotal, ""]);
-      }
-
-      // Create worksheet
-      const ws = xlsx.utils.aoa_to_sheet(wsData);
-
-      // Set column widths
-      ws["!cols"] = [
-        { wch: 12 }, // Date
-        { wch: 12 }, // Doc number
-        { wch: 40 }, // Product name
-        { wch: 15 }, // Code
-        { wch: 10 }, // Quantity
-        { wch: 15 }, // Price
-        { wch: 15 }, // Sum
-        { wch: 15 }, // Status
-      ];
-
-      // Add worksheet to workbook
-      xlsx.utils.book_append_sheet(workbook, ws, t.sheetName);
-
-      // Generate file path
-      const tempDir = path.join(__dirname, "../../temp");
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-
-      const timestamp = Date.now();
-      const fileName = `orders_${counterparty.phone}_${timestamp}.xlsx`;
-      const filePath = path.join(tempDir, fileName);
-
-      // Write file
-      xlsx.writeFile(workbook, filePath);
-
-      console.log(`✅ Excel file generated: ${filePath}`);
-      return filePath;
-    } catch (error) {
-      console.error("Error generating Excel file:", error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate combined Excel file with both shipments and orders
+   * Generate combined Excel file with detailed shipments and orders
+   * Shows each document with full product details (image, name, code, quantity, price)
    * @param {Object} data - Data object
    * @param {Object} data.counterparty - Counterparty info
    * @param {Array} data.shipments - Array of shipments
@@ -431,9 +42,9 @@ class ExcelGenerator {
 
       const t = texts[language] || texts.uz;
 
-      // Generate shipments sheet
+      // Generate shipments sheet with detailed products
       if (shipments && shipments.length > 0) {
-        const shipmentsWS = this.generateShipmentsSheet(
+        const shipmentsWS = this.generateDetailedShipmentsSheet(
           counterparty,
           shipments,
           language
@@ -441,9 +52,9 @@ class ExcelGenerator {
         xlsx.utils.book_append_sheet(workbook, shipmentsWS, t.shipmentsSheet);
       }
 
-      // Generate orders sheet
+      // Generate orders sheet with detailed products
       if (orders && orders.length > 0) {
-        const ordersWS = this.generateOrdersSheet(
+        const ordersWS = this.generateDetailedOrdersSheet(
           counterparty,
           orders,
           language
@@ -473,47 +84,60 @@ class ExcelGenerator {
   }
 
   /**
-   * Generate worksheet for shipments
+   * Generate detailed worksheet for shipments
+   * Each shipment shows document info and all products with details
    * @private
    */
-  generateShipmentsSheet(counterparty, shipments, language) {
+  generateDetailedShipmentsSheet(counterparty, shipments, language) {
     const texts = {
       uz: {
-        title: "YUBORUVLAR TARIXI",
+        title: "YUBORUVLAR TARIXI (Что получил клиент)",
         clientName: "Mijoz:",
         phone: "Telefon:",
         totalDebt: "Jami qarz:",
-        date: "Sana",
-        docNumber: "Hujjat №",
+        docInfo: "HUJJAT MA'LUMOTLARI",
+        date: "Sana:",
+        docNumber: "Hujjat raqami:",
+        sum: "Summa:",
+        status: "Holat:",
+        productsTitle: "MAHSULOTLAR:",
         productName: "Mahsulot nomi",
+        image: "Rasm",
         code: "Kod",
+        article: "Artikul",
         quantity: "Miqdor",
         price: "Narx",
-        sum: "Summa",
-        status: "Holat",
+        productSum: "Summa",
         total: "JAMI:",
+        grandTotal: "UMUMIY JAMI:",
       },
       ru: {
-        title: "ИСТОРИЯ ОТГРУЗОК",
+        title: "ИСТОРИЯ ОТГРУЗОК (Что получил клиент)",
         clientName: "Клиент:",
         phone: "Телефон:",
         totalDebt: "Общий долг:",
-        date: "Дата",
-        docNumber: "Документ №",
+        docInfo: "ИНФОРМАЦИЯ О ДОКУМЕНТЕ",
+        date: "Дата:",
+        docNumber: "Номер документа:",
+        sum: "Сумма:",
+        status: "Статус:",
+        productsTitle: "ТОВАРЫ:",
         productName: "Наименование товара",
+        image: "Фото",
         code: "Код",
+        article: "Артикул",
         quantity: "Кол-во",
         price: "Цена",
-        sum: "Сумма",
-        status: "Статус",
+        productSum: "Сумма",
         total: "ИТОГО:",
+        grandTotal: "ОБЩИЙ ИТОГ:",
       },
     };
 
     const t = texts[language] || texts.uz;
     const wsData = [];
 
-    // Header
+    // Header with counterparty info
     wsData.push([t.title]);
     wsData.push([]);
     wsData.push([t.clientName, counterparty.name]);
@@ -525,140 +149,165 @@ class ExcelGenerator {
       ]);
     }
     wsData.push([]);
+    wsData.push(["═".repeat(100)]);
+    wsData.push([]);
 
-    // Table header
-    wsData.push([
-      t.date,
-      t.docNumber,
-      t.productName,
-      t.code,
-      t.quantity,
-      t.price,
-      t.sum,
-      t.status,
-    ]);
-
-    // Process shipments
     let grandTotal = 0;
-    shipments.forEach((shipment) => {
+
+    // Process each shipment with detailed product info
+    shipments.forEach((shipment, index) => {
       const date = new Date(shipment.date).toLocaleDateString(
         language === "ru" ? "ru-RU" : "uz-UZ"
       );
 
+      // Document header
+      wsData.push([`${t.docInfo} #${index + 1}`]);
+      wsData.push([t.date, date]);
+      wsData.push([t.docNumber, shipment.number || shipment.name]);
+      wsData.push([t.sum, this.formatCurrency(shipment.sum)]);
+      wsData.push([t.status, shipment.state]);
+      wsData.push([]);
+
+      // Products table header
+      wsData.push([t.productsTitle]);
+      wsData.push([
+        "№",
+        t.image,
+        t.productName,
+        t.code,
+        t.article,
+        t.quantity,
+        t.price,
+        t.productSum,
+      ]);
+
+      // Products data
       if (shipment.products && shipment.products.length > 0) {
-        const firstProduct = shipment.products[0];
-        // Add image icon for products with images
-        let productName = firstProduct.name;
-        if (firstProduct.imageUrl) {
-          productName = `${firstProduct.name} 📷`;
-        }
+        console.log(
+          `📦 Shipment #${index + 1} has ${shipment.products.length} products`
+        );
 
-        wsData.push([
-          date,
-          shipment.number || shipment.name,
-          productName,
-          firstProduct.code || firstProduct.article,
-          firstProduct.quantity,
-          firstProduct.price,
-          firstProduct.sum,
-          shipment.state,
-        ]);
+        shipment.products.forEach((product, prodIndex) => {
+          console.log(`  Product ${prodIndex + 1}:`, {
+            name: product.name,
+            code: product.code,
+            article: product.article,
+            quantity: product.quantity,
+            price: product.price,
+            sum: product.sum,
+            imageUrl: product.imageUrl,
+          });
 
-        for (let i = 1; i < shipment.products.length; i++) {
-          const product = shipment.products[i];
-          let prodName = product.name;
-          if (product.imageUrl) {
-            prodName = `${product.name} 📷`;
-          }
+          const imageIndicator = product.imageUrl ? "📷 Bor" : "-";
 
           wsData.push([
-            "",
-            "",
-            prodName,
-            product.code || product.article,
-            product.quantity,
-            product.price,
-            product.sum,
-            "",
+            prodIndex + 1,
+            imageIndicator,
+            product.name || "N/A",
+            product.code || "-",
+            product.article || "-",
+            product.quantity || 0,
+            this.formatCurrency(product.price || 0),
+            this.formatCurrency(product.sum || 0),
           ]);
-        }
+        });
       } else {
-        wsData.push([
-          date,
-          shipment.number || shipment.name,
-          "-",
-          "",
-          "",
-          "",
-          shipment.sum,
-          shipment.state,
-        ]);
+        console.log(`⚠️ Shipment #${index + 1} has NO products!`);
+        wsData.push(["-", "-", "Ma'lumot yo'q", "-", "-", "-", "-", "-"]);
       }
 
-      grandTotal += shipment.sum;
       wsData.push([]);
+      wsData.push([
+        "",
+        "",
+        "",
+        "",
+        "",
+        t.total,
+        this.formatCurrency(shipment.sum),
+      ]);
+      wsData.push([]);
+      wsData.push(["─".repeat(100)]);
+      wsData.push([]);
+
+      grandTotal += shipment.sum;
     });
 
     // Grand total
-    wsData.push(["", "", "", "", "", t.total, grandTotal, ""]);
+    wsData.push([t.grandTotal, this.formatCurrency(grandTotal)]);
 
     const ws = xlsx.utils.aoa_to_sheet(wsData);
+
+    // Set column widths for better readability
     ws["!cols"] = [
-      { wch: 12 },
-      { wch: 12 },
-      { wch: 40 },
-      { wch: 15 },
-      { wch: 10 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 15 },
+      { wch: 5 }, // №
+      { wch: 10 }, // Image
+      { wch: 50 }, // Product name
+      { wch: 15 }, // Code
+      { wch: 15 }, // Article
+      { wch: 10 }, // Quantity
+      { wch: 15 }, // Price
+      { wch: 15 }, // Sum
     ];
 
     return ws;
   }
 
   /**
-   * Generate worksheet for orders
+   * Generate detailed worksheet for orders
+   * Each order shows document info and all products with details
    * @private
    */
-  generateOrdersSheet(counterparty, orders, language) {
+  generateDetailedOrdersSheet(counterparty, orders, language) {
     const texts = {
       uz: {
         title: "BUYURTMALAR TARIXI",
         clientName: "Mijoz:",
         phone: "Telefon:",
         totalDebt: "Jami qarz:",
-        date: "Sana",
-        docNumber: "Hujjat №",
+        docInfo: "HUJJAT MA'LUMOTLARI",
+        date: "Sana:",
+        docNumber: "Hujjat raqami:",
+        sum: "Summa:",
+        status: "Holat:",
+        productsTitle: "MAHSULOTLAR:",
         productName: "Mahsulot nomi",
+        image: "Rasm",
         code: "Kod",
+        article: "Artikul",
         quantity: "Miqdor",
         price: "Narx",
-        sum: "Summa",
-        status: "Holat",
+        productSum: "Summa",
         total: "JAMI:",
+        grandTotal: "UMUMIY JAMI:",
       },
       ru: {
         title: "ИСТОРИЯ ЗАКАЗОВ",
         clientName: "Клиент:",
         phone: "Телефон:",
         totalDebt: "Общий долг:",
-        date: "Дата",
-        docNumber: "Документ №",
+        docInfo: "ИНФОРМАЦИЯ О ДОКУМЕНТЕ",
+        date: "Дата:",
+        docNumber: "Номер документа:",
+        sum: "Сумма:",
+        status: "Статус:",
+        productsTitle: "ТОВАРЫ:",
         productName: "Наименование товара",
+        image: "Фото",
         code: "Код",
+        article: "Артикул",
         quantity: "Кол-во",
         price: "Цена",
-        sum: "Сумма",
-        status: "Статус",
+        productSum: "Сумма",
         total: "ИТОГО:",
+        grandTotal: "ОБЩИЙ ИТОГ:",
       },
     };
 
     const t = texts[language] || texts.uz;
     const wsData = [];
 
-    // Header
+    // Header with counterparty info
     wsData.push([t.title]);
     wsData.push([]);
     wsData.push([t.clientName, counterparty.name]);
@@ -670,93 +319,105 @@ class ExcelGenerator {
       ]);
     }
     wsData.push([]);
+    wsData.push(["═".repeat(100)]);
+    wsData.push([]);
 
-    // Table header
-    wsData.push([
-      t.date,
-      t.docNumber,
-      t.productName,
-      t.code,
-      t.quantity,
-      t.price,
-      t.sum,
-      t.status,
-    ]);
-
-    // Process orders
     let grandTotal = 0;
-    orders.forEach((order) => {
+
+    // Process each order with detailed product info
+    orders.forEach((order, index) => {
       const date = new Date(order.date).toLocaleDateString(
         language === "ru" ? "ru-RU" : "uz-UZ"
       );
 
+      // Document header
+      wsData.push([`${t.docInfo} #${index + 1}`]);
+      wsData.push([t.date, date]);
+      wsData.push([t.docNumber, order.number || order.name]);
+      wsData.push([t.sum, this.formatCurrency(order.sum)]);
+      wsData.push([t.status, order.state]);
+      wsData.push([]);
+
+      // Products table header
+      wsData.push([t.productsTitle]);
+      wsData.push([
+        "№",
+        t.image,
+        t.productName,
+        t.code,
+        t.article,
+        t.quantity,
+        t.price,
+        t.productSum,
+      ]);
+
+      // Products data
       if (order.products && order.products.length > 0) {
-        const firstProduct = order.products[0];
-        // Add image icon for products with images
-        let productName = firstProduct.name;
-        if (firstProduct.imageUrl) {
-          productName = `${firstProduct.name} 📷`;
-        }
+        console.log(
+          `📦 Order #${index + 1} has ${order.products.length} products`
+        );
 
-        wsData.push([
-          date,
-          order.number || order.name,
-          productName,
-          firstProduct.code || firstProduct.article,
-          firstProduct.quantity,
-          firstProduct.price,
-          firstProduct.sum,
-          order.state,
-        ]);
+        order.products.forEach((product, prodIndex) => {
+          console.log(`  Product ${prodIndex + 1}:`, {
+            name: product.name,
+            code: product.code,
+            article: product.article,
+            quantity: product.quantity,
+            price: product.price,
+            sum: product.sum,
+            imageUrl: product.imageUrl,
+          });
 
-        for (let i = 1; i < order.products.length; i++) {
-          const product = order.products[i];
-          let prodName = product.name;
-          if (product.imageUrl) {
-            prodName = `${product.name} 📷`;
-          }
+          const imageIndicator = product.imageUrl ? "📷 Bor" : "-";
 
           wsData.push([
-            "",
-            "",
-            prodName,
-            product.code || product.article,
-            product.quantity,
-            product.price,
-            product.sum,
-            "",
+            prodIndex + 1,
+            imageIndicator,
+            product.name || "N/A",
+            product.code || "-",
+            product.article || "-",
+            product.quantity || 0,
+            this.formatCurrency(product.price || 0),
+            this.formatCurrency(product.sum || 0),
           ]);
-        }
+        });
       } else {
-        wsData.push([
-          date,
-          order.number || order.name,
-          "-",
-          "",
-          "",
-          "",
-          order.sum,
-          order.state,
-        ]);
+        console.log(`⚠️ Order #${index + 1} has NO products!`);
+        wsData.push(["-", "-", "Ma'lumot yo'q", "-", "-", "-", "-", "-"]);
       }
 
-      grandTotal += order.sum;
       wsData.push([]);
+      wsData.push([
+        "",
+        "",
+        "",
+        "",
+        "",
+        t.total,
+        this.formatCurrency(order.sum),
+      ]);
+      wsData.push([]);
+      wsData.push(["─".repeat(100)]);
+      wsData.push([]);
+
+      grandTotal += order.sum;
     });
 
     // Grand total
-    wsData.push(["", "", "", "", "", t.total, grandTotal, ""]);
+    wsData.push([t.grandTotal, this.formatCurrency(grandTotal)]);
 
     const ws = xlsx.utils.aoa_to_sheet(wsData);
+
+    // Set column widths for better readability
     ws["!cols"] = [
-      { wch: 12 },
-      { wch: 12 },
-      { wch: 40 },
-      { wch: 15 },
-      { wch: 10 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 15 },
+      { wch: 5 }, // №
+      { wch: 10 }, // Image
+      { wch: 50 }, // Product name
+      { wch: 15 }, // Code
+      { wch: 15 }, // Article
+      { wch: 10 }, // Quantity
+      { wch: 15 }, // Price
+      { wch: 15 }, // Sum
     ];
 
     return ws;

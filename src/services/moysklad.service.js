@@ -714,7 +714,7 @@ class MoySkladService {
         return cached;
       }
 
-      const url = `${this.apiUrl}/entity/demand?filter=agent=${this.apiUrl}/entity/counterparty/${counterpartyId}&limit=${limit}&order=moment,desc&expand=positions`;
+      const url = `${this.apiUrl}/entity/demand?filter=agent=${this.apiUrl}/entity/counterparty/${counterpartyId}&limit=${limit}&order=moment,desc&expand=positions.assortment`;
 
       console.log(`Fetching shipments for counterparty ${counterpartyId}`);
 
@@ -737,25 +737,76 @@ class MoySkladService {
 
           // Get product details from positions
           if (demand.positions && demand.positions.rows) {
+            console.log(
+              `  📦 Shipment has ${demand.positions.rows.length} positions`
+            );
+
             for (const position of demand.positions.rows) {
-              // Get product image URL if available
+              // Get full assortment details
+              let productName = "N/A";
+              let productCode = "";
+              let productArticle = "";
               let imageUrl = null;
-              if (position.assortment?.image) {
-                imageUrl = position.assortment.image.meta?.href || null;
+              let productId = null;
+
+              if (position.assortment && position.assortment.meta) {
+                productId =
+                  position.assortment.meta.href?.split("/").pop() || null;
+
+                // Fetch full product details if we have meta.href
+                if (position.assortment.meta.href) {
+                  try {
+                    const productResponse = await fetch(
+                      position.assortment.meta.href,
+                      {
+                        method: "GET",
+                        headers: this.getHeaders(),
+                      }
+                    );
+
+                    if (productResponse.ok) {
+                      const productData = await productResponse.json();
+                      productName = productData.name || "N/A";
+                      productCode = productData.code || "";
+                      productArticle = productData.article || "";
+
+                      // Get image URL if available
+                      if (productData.image && productData.image.meta) {
+                        imageUrl = productData.image.meta.href || null;
+                      }
+                    }
+                  } catch (error) {
+                    console.error(
+                      `Error fetching product details:`,
+                      error.message
+                    );
+                    // Use fallback values
+                    productName = position.assortment.name || "N/A";
+                  }
+                } else {
+                  // Use fallback from position.assortment if available
+                  productName = position.assortment.name || "N/A";
+                  productCode = position.assortment.code || "";
+                  productArticle = position.assortment.article || "";
+                }
               }
 
-              products.push({
-                name: position.assortment?.name || "N/A",
-                code: position.assortment?.code || "",
-                article: position.assortment?.article || "",
+              const productData = {
+                name: productName,
+                code: productCode,
+                article: productArticle,
                 quantity: position.quantity || 0,
                 price: (position.price || 0) / 100,
                 sum: ((position.price || 0) * (position.quantity || 0)) / 100,
                 imageUrl: imageUrl,
-                productId:
-                  position.assortment?.meta?.href?.split("/").pop() || null,
-              });
+                productId: productId,
+              };
+
+              console.log(`    Product:`, productData);
+              products.push(productData);
             }
+          } else {
+            console.log(`  ⚠️ No positions found in shipment`);
           }
 
           shipments.push({
@@ -808,7 +859,7 @@ class MoySkladService {
         return cached;
       }
 
-      const url = `${this.apiUrl}/entity/customerorder?filter=agent=${this.apiUrl}/entity/counterparty/${counterpartyId}&limit=${limit}&order=moment,desc&expand=positions`;
+      const url = `${this.apiUrl}/entity/customerorder?filter=agent=${this.apiUrl}/entity/counterparty/${counterpartyId}&limit=${limit}&order=moment,desc&expand=positions.assortment`;
 
       console.log(`Fetching orders for counterparty ${counterpartyId}`);
 
@@ -831,25 +882,76 @@ class MoySkladService {
 
           // Get product details from positions
           if (order.positions && order.positions.rows) {
+            console.log(
+              `  📦 Order has ${order.positions.rows.length} positions`
+            );
+
             for (const position of order.positions.rows) {
-              // Get product image URL if available
+              // Get full assortment details
+              let productName = "N/A";
+              let productCode = "";
+              let productArticle = "";
               let imageUrl = null;
-              if (position.assortment?.image) {
-                imageUrl = position.assortment.image.meta?.href || null;
+              let productId = null;
+
+              if (position.assortment && position.assortment.meta) {
+                productId =
+                  position.assortment.meta.href?.split("/").pop() || null;
+
+                // Fetch full product details if we have meta.href
+                if (position.assortment.meta.href) {
+                  try {
+                    const productResponse = await fetch(
+                      position.assortment.meta.href,
+                      {
+                        method: "GET",
+                        headers: this.getHeaders(),
+                      }
+                    );
+
+                    if (productResponse.ok) {
+                      const productData = await productResponse.json();
+                      productName = productData.name || "N/A";
+                      productCode = productData.code || "";
+                      productArticle = productData.article || "";
+
+                      // Get image URL if available
+                      if (productData.image && productData.image.meta) {
+                        imageUrl = productData.image.meta.href || null;
+                      }
+                    }
+                  } catch (error) {
+                    console.error(
+                      `Error fetching product details:`,
+                      error.message
+                    );
+                    // Use fallback values
+                    productName = position.assortment.name || "N/A";
+                  }
+                } else {
+                  // Use fallback from position.assortment if available
+                  productName = position.assortment.name || "N/A";
+                  productCode = position.assortment.code || "";
+                  productArticle = position.assortment.article || "";
+                }
               }
 
-              products.push({
-                name: position.assortment?.name || "N/A",
-                code: position.assortment?.code || "",
-                article: position.assortment?.article || "",
+              const productData = {
+                name: productName,
+                code: productCode,
+                article: productArticle,
                 quantity: position.quantity || 0,
                 price: (position.price || 0) / 100,
                 sum: ((position.price || 0) * (position.quantity || 0)) / 100,
                 imageUrl: imageUrl,
-                productId:
-                  position.assortment?.meta?.href?.split("/").pop() || null,
-              });
+                productId: productId,
+              };
+
+              console.log(`    Product:`, productData);
+              products.push(productData);
             }
+          } else {
+            console.log(`  ⚠️ No positions found in order`);
           }
 
           orders.push({
