@@ -1,6 +1,9 @@
 import { Telegraf, Markup, session } from "telegraf";
 import User from "../models/User.js";
 import moySkladService from "../services/moysklad.service.js";
+import excelGenerator from "../utils/excelGenerator.js";
+import fs from "fs";
+import { Input } from "telegraf";
 
 /**
  * Telegram Bot Handler
@@ -940,7 +943,82 @@ class TelegramBot {
           `📊 Balansni tekshirish: /stat`;
       }
 
-      await this.bot.telegram.sendMessage(telegramId, message);
+      // Generate and send Excel file with shipments - Combined with message
+      if (counterpartyId) {
+        try {
+          console.log("📊 Generating Excel file with order history...");
+
+          // Get counterparty details
+          const counterparty = await moySkladService.getCounterpartyDetails(
+            counterpartyId
+          );
+
+          // Get shipments (отгрузки) - what they received
+          const shipments = await moySkladService.getCounterpartyShipments(
+            counterpartyId,
+            { limit: 50 }
+          );
+
+          // Get orders (заказы) - what they ordered
+          const orders = await moySkladService.getCounterpartyOrders(
+            counterpartyId,
+            { limit: 50 }
+          );
+
+          console.log(
+            `📦 Found ${shipments.length} shipments and ${orders.length} orders`
+          );
+
+          if (shipments.length > 0 || orders.length > 0) {
+            // Generate Excel file
+            const excelPath = await excelGenerator.generateCombinedExcel(
+              {
+                counterparty: {
+                  id: counterpartyId,
+                  name: counterpartyName,
+                  phone: counterparty?.phone || "",
+                  balance: counterparty?.balance || 0,
+                },
+                shipments: shipments,
+                orders: orders,
+              },
+              language
+            );
+
+            // Send Excel file with debt message as caption - COMBINED MESSAGE
+            await this.bot.telegram.sendDocument(
+              telegramId,
+              Input.fromLocalFile(excelPath),
+              { caption: message }
+            );
+
+            console.log(`✅ Excel file sent to ${telegramId}`);
+
+            // Clean up file after sending
+            setTimeout(() => {
+              try {
+                if (fs.existsSync(excelPath)) {
+                  fs.unlinkSync(excelPath);
+                  console.log(`🗑️  Deleted temp file: ${excelPath}`);
+                }
+              } catch (err) {
+                console.error("Error deleting temp file:", err.message);
+              }
+            }, 5000);
+          } else {
+            // No shipments or orders - send message without Excel
+            console.log("No shipments or orders found, sending message only");
+            await this.bot.telegram.sendMessage(telegramId, message);
+          }
+        } catch (error) {
+          console.error("Error generating/sending Excel file:", error.message);
+          // Fallback: send message without Excel
+          await this.bot.telegram.sendMessage(telegramId, message);
+        }
+      } else {
+        // No counterpartyId - send message only
+        await this.bot.telegram.sendMessage(telegramId, message);
+      }
 
       console.log(
         `✅ Debt reminder sent to ${telegramId} (${language}): ${debtAmount}`

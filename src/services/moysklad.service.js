@@ -689,6 +689,194 @@ class MoySkladService {
       maximumFractionDigits: 0,
     }).format(amount);
   }
+
+  /**
+   * Get shipments (demands) for a counterparty with product details
+   * @param {string} counterpartyId - MoySklad counterparty ID
+   * @param {Object} options - Options
+   * @param {number} options.limit - Max shipments (default: 50)
+   * @returns {Promise<Array>} Array of shipments with product details
+   */
+  async getCounterpartyShipments(counterpartyId, options = {}) {
+    try {
+      if (!counterpartyId) {
+        throw new Error("Counterparty ID is required");
+      }
+
+      const { limit = 50 } = options;
+
+      const cacheKey = `counterparty:${counterpartyId}:shipments`;
+
+      // Check cache
+      const cached = await Cache.get(cacheKey);
+      if (cached) {
+        console.log(`✅ Cache hit for shipments ${counterpartyId}`);
+        return cached;
+      }
+
+      const url = `${this.apiUrl}/entity/demand?filter=agent=${this.apiUrl}/entity/counterparty/${counterpartyId}&limit=${limit}&order=moment,desc&expand=positions`;
+
+      console.log(`Fetching shipments for counterparty ${counterpartyId}`);
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        console.error(`Error fetching shipments: ${response.status}`);
+        return [];
+      }
+
+      const data = await response.json();
+      const shipments = [];
+
+      if (data.rows && data.rows.length > 0) {
+        for (const demand of data.rows) {
+          const products = [];
+
+          // Get product details from positions
+          if (demand.positions && demand.positions.rows) {
+            for (const position of demand.positions.rows) {
+              // Get product image URL if available
+              let imageUrl = null;
+              if (position.assortment?.image) {
+                imageUrl = position.assortment.image.meta?.href || null;
+              }
+
+              products.push({
+                name: position.assortment?.name || "N/A",
+                code: position.assortment?.code || "",
+                article: position.assortment?.article || "",
+                quantity: position.quantity || 0,
+                price: (position.price || 0) / 100,
+                sum: ((position.price || 0) * (position.quantity || 0)) / 100,
+                imageUrl: imageUrl,
+                productId:
+                  position.assortment?.meta?.href?.split("/").pop() || null,
+              });
+            }
+          }
+
+          shipments.push({
+            id: demand.id,
+            name: demand.name,
+            number: demand.name?.match(/\d+/)?.[0] || "",
+            date: demand.moment || demand.created,
+            sum: (demand.sum || 0) / 100,
+            description: demand.description || "",
+            state: demand.state?.name || "N/A",
+            products: products,
+            productsCount: products.length,
+            moySkladUrl: `https://online.moysklad.ru/app/#/demand/edit?id=${demand.id}`,
+          });
+        }
+      }
+
+      // Cache for 5 minutes
+      await Cache.set(cacheKey, shipments, 300);
+
+      console.log(`✅ Found ${shipments.length} shipments`);
+      return shipments;
+    } catch (error) {
+      console.error("Error getting counterparty shipments:", error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get customer orders for a counterparty with product details
+   * @param {string} counterpartyId - MoySklad counterparty ID
+   * @param {Object} options - Options
+   * @param {number} options.limit - Max orders (default: 50)
+   * @returns {Promise<Array>} Array of orders with product details
+   */
+  async getCounterpartyOrders(counterpartyId, options = {}) {
+    try {
+      if (!counterpartyId) {
+        throw new Error("Counterparty ID is required");
+      }
+
+      const { limit = 50 } = options;
+
+      const cacheKey = `counterparty:${counterpartyId}:orders`;
+
+      // Check cache
+      const cached = await Cache.get(cacheKey);
+      if (cached) {
+        console.log(`✅ Cache hit for orders ${counterpartyId}`);
+        return cached;
+      }
+
+      const url = `${this.apiUrl}/entity/customerorder?filter=agent=${this.apiUrl}/entity/counterparty/${counterpartyId}&limit=${limit}&order=moment,desc&expand=positions`;
+
+      console.log(`Fetching orders for counterparty ${counterpartyId}`);
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        console.error(`Error fetching orders: ${response.status}`);
+        return [];
+      }
+
+      const data = await response.json();
+      const orders = [];
+
+      if (data.rows && data.rows.length > 0) {
+        for (const order of data.rows) {
+          const products = [];
+
+          // Get product details from positions
+          if (order.positions && order.positions.rows) {
+            for (const position of order.positions.rows) {
+              // Get product image URL if available
+              let imageUrl = null;
+              if (position.assortment?.image) {
+                imageUrl = position.assortment.image.meta?.href || null;
+              }
+
+              products.push({
+                name: position.assortment?.name || "N/A",
+                code: position.assortment?.code || "",
+                article: position.assortment?.article || "",
+                quantity: position.quantity || 0,
+                price: (position.price || 0) / 100,
+                sum: ((position.price || 0) * (position.quantity || 0)) / 100,
+                imageUrl: imageUrl,
+                productId:
+                  position.assortment?.meta?.href?.split("/").pop() || null,
+              });
+            }
+          }
+
+          orders.push({
+            id: order.id,
+            name: order.name,
+            number: order.name?.match(/\d+/)?.[0] || "",
+            date: order.moment || order.created,
+            sum: (order.sum || 0) / 100,
+            description: order.description || "",
+            state: order.state?.name || "N/A",
+            products: products,
+            productsCount: products.length,
+            moySkladUrl: `https://online.moysklad.ru/app/#/customerorder/edit?id=${order.id}`,
+          });
+        }
+      }
+
+      // Cache for 5 minutes
+      await Cache.set(cacheKey, orders, 300);
+
+      console.log(`✅ Found ${orders.length} orders`);
+      return orders;
+    } catch (error) {
+      console.error("Error getting counterparty orders:", error.message);
+      return [];
+    }
+  }
 }
 
 // Export singleton instance

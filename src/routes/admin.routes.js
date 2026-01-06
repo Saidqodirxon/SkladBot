@@ -1,5 +1,6 @@
 import express from "express";
 import cron from "node-cron";
+import fs from "fs";
 import Admin from "../models/Admin.js";
 import User from "../models/User.js";
 import Statistics from "../models/Statistics.js";
@@ -8,6 +9,7 @@ import Settings from "../models/Settings.js";
 import moySkladService from "../services/moysklad.service.js";
 import telegramBot from "../bot/index.js";
 import rateLimiter from "../utils/rateLimiter.js";
+import excelGenerator from "../utils/excelGenerator.js";
 import { requireAuth, redirectIfAuthenticated } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -1152,6 +1154,162 @@ router.post("/settings/system", requireAuth, async (req, res) => {
     res.redirect(
       "/admin/settings?error=" + encodeURIComponent("Ошибка при обновлении")
     );
+  }
+});
+
+/**
+ * GET /admin/users/:id/orders
+ * View order history for a specific user
+ */
+router.get("/users/:id/orders", requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).send("Пользователь не найден");
+    }
+
+    // Get counterparty from MoySklad
+    const counterparty = await moySkladService.getCounterpartyByPhone(
+      user.phone
+    );
+
+    if (!counterparty) {
+      return res.render("error", {
+        title: "Ошибка",
+        message: "Контрагент не найден в MoySklad",
+        backUrl: `/admin/users/${user._id}/edit`,
+      });
+    }
+
+    // Get shipments and orders
+    const [shipments, orders] = await Promise.all([
+      moySkladService.getCounterpartyShipments(counterparty.id, { limit: 50 }),
+      moySkladService.getCounterpartyOrders(counterparty.id, { limit: 50 }),
+    ]);
+
+    res.render("user-orders", {
+      title: `История заказов - ${user.getFullName()}`,
+      user: user,
+      counterparty: counterparty,
+      shipments: shipments,
+      orders: orders,
+      formatCurrency: moySkladService.formatCurrency.bind(moySkladService),
+    });
+  } catch (error) {
+    console.error("Error viewing user orders:", error);
+    res.status(500).render("error", {
+      title: "Ошибка",
+      message: "Произошла ошибка при загрузке заказов",
+      backUrl: `/admin/users`,
+    });
+  }
+});
+
+/**
+ * GET /admin/users/:id/orders/export
+ * Export order history as Excel file
+ */
+router.get("/users/:id/orders/export", requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).send("Пользователь не найден");
+    }
+
+    // Get counterparty from MoySklad
+    const counterparty = await moySkladService.getCounterpartyByPhone(
+      user.phone
+    );
+
+    if (!counterparty) {
+      return res.status(404).send("Контрагент не найден в MoySklad");
+    }
+
+    // Get shipments and orders
+    const [shipments, orders] = await Promise.all([
+      moySkladService.getCounterpartyShipments(counterparty.id, { limit: 50 }),
+      moySkladService.getCounterpartyOrders(counterparty.id, { limit: 50 }),
+    ]);
+
+    // Generate Excel file
+    const excelPath = await excelGenerator.generateCombinedExcel(
+      {
+        counterparty: {
+          id: counterparty.id,
+          name: counterparty.name,
+          phone: user.phone,
+          balance: counterparty.balance,
+        },
+        shipments: shipments,
+        orders: orders,
+      },
+      "ru" // Admin panel in Russian
+    );
+
+    // Send file
+    const fileName = `history_${user.phone}_${Date.now()}.xlsx`;
+    res.download(excelPath, fileName, (err) => {
+      if (err) {
+        console.error("Error sending file:", err);
+      }
+      // Clean up file after sending
+      setTimeout(() => {
+        try {
+          if (fs.existsSync(excelPath)) {
+            fs.unlinkSync(excelPath);
+            console.log(`🗑️  Deleted temp file: ${excelPath}`);
+          }
+        } catch (error) {
+          console.error("Error deleting temp file:", error.message);
+        }
+      }, 5000);
+    });
+  } catch (error) {
+    console.error("Error exporting orders:", error);
+    res.status(500).send("Ошибка при экспорте");
+  }
+});
+
+/**
+ * GET /admin/counterparty/:id/orders
+ * Get orders and shipments for counterparty (API endpoint)
+ */
+router.get("/counterparty/:id/orders", requireAuth, async (req, res) => {
+  try {
+    const counterpartyId = req.params.id;
+
+    if (!counterpartyId) {
+      return res.status(400).json({ error: "Counterparty ID is required" });
+    }
+
+    console.log(`Fetching orders for counterparty: ${counterpartyId}`);
+
+    // Get shipments and orders
+    const [shipments, orders] = await Promise.all([
+      moySkladService.getCounterpartyShipments(counterpartyId, { limit: 50 }),
+      moySkladService.getCounterpartyOrders(counterpartyId, { limit: 50 }),
+    ]);
+
+    res.json({
+      success: true,
+      counterpartyId,
+      shipments,
+      orders,
+      totals: {
+        shipmentsCount: shipments.length,
+        ordersCount: orders.length,
+        shipmentsSum: shipments.reduce((sum, s) => sum + s.sum, 0),
+        ordersSum: orders.reduce((sum, o) => sum + o.sum, 0),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching counterparty orders:", error);
+    res.status(500).json({
+      success: false,
+      error: "Ошибка при получении заказов",
+    });
   }
 });
 
