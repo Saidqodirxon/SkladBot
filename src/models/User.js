@@ -108,15 +108,15 @@ userSchema.statics.normalizePhone = function (phone) {
   // Remove all non-digit characters except the leading +
   // This handles formats like: +998 97 912 61 61, +998-97-912-61-61, +998 (97) 912-61-61
   let normalized = phone.trim();
-  
+
   // Keep only digits and the + sign
-  normalized = normalized.replace(/[^\d+]/g, '');
-  
+  normalized = normalized.replace(/[^\d+]/g, "");
+
   // Ensure it starts with +998
-  if (normalized.startsWith('998') && !normalized.startsWith('+998')) {
-    normalized = '+' + normalized;
+  if (normalized.startsWith("998") && !normalized.startsWith("+998")) {
+    normalized = "+" + normalized;
   }
-  
+
   return normalized;
 };
 
