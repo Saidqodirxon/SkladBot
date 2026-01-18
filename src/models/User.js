@@ -105,8 +105,19 @@ userSchema.statics.findActiveUsers = function () {
 
 // Static method to normalize phone number
 userSchema.statics.normalizePhone = function (phone) {
-  // Return phone as-is without any formatting
-  return phone.trim();
+  // Remove all non-digit characters except the leading +
+  // This handles formats like: +998 97 912 61 61, +998-97-912-61-61, +998 (97) 912-61-61
+  let normalized = phone.trim();
+  
+  // Keep only digits and the + sign
+  normalized = normalized.replace(/[^\d+]/g, '');
+  
+  // Ensure it starts with +998
+  if (normalized.startsWith('998') && !normalized.startsWith('+998')) {
+    normalized = '+' + normalized;
+  }
+  
+  return normalized;
 };
 
 const User = mongoose.model("User", userSchema);
